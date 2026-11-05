@@ -540,10 +540,64 @@ function draw(){
   ctx.translate(-cameraX+(Math.random()-.5)*shake,(Math.random()-.5)*shake);
 
   for(const p of platforms){
-    if(p.x+p.w>cameraX&&p.x<cameraX+viewW){
-      ctx.fillStyle=p.color;ctx.shadowBlur=5+beatFlash*15;ctx.shadowColor=p.color;ctx.fillRect(p.x,p.y,p.w,p.h);}
+    if(p.x+p.w>cameraX && p.x<cameraX+viewW){
+      ctx.shadowBlur = 0; // Wyłączamy neonowy blask dla klasycznego stylu
+      
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(p.x, p.y, p.w, p.h);
+      ctx.clip();
+
+      // 1. Ziemia (Dirt) - tło
+      ctx.fillStyle = '#8B4513'; // Klasyczny brąz
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+
+      // 2. Szachownica / tekstura pikselowej ziemi
+      ctx.fillStyle = '#654321'; // Ciemniejszy brąz
+      for(let y = p.y + 12; y < p.y + p.h; y += 16) {
+        for(let x = p.x; x < p.x + p.w; x += 16) {
+          if (Math.floor((x - p.x) / 16 + (y - p.y) / 16) % 2 === 0) {
+            ctx.fillRect(x, y, 16, 16);
+          }
+        }
+      }
+
+      // 3. Błyszczące "piksele/kamienie" w ziemi (animacja mrugania)
+      const isTwinkling = Math.floor(tm * 4) % 2 === 0;
+      ctx.fillStyle = isTwinkling ? '#DAA520' : '#8B4513';
+      ctx.fillRect(p.x + 16, p.y + 24, 4, 4);
+      ctx.fillRect(p.x + p.w - 32, p.y + 36, 4, 4);
+
+      // 4. Górna warstwa - Trawa
+      ctx.fillStyle = '#228B22'; // Ciemna zieleń
+      ctx.fillRect(p.x, p.y, p.w, 12);
+
+      // 5. Animowane, falujące źdźbła trawy (pixel art)
+      ctx.fillStyle = '#32CD32'; // Jasna zieleń
+      for(let i = 0; i < p.w; i += 8) {
+        // Wysokość trawy zmienia się płynnie w czasie, tworząc efekt wiatru
+        const grassHeight = 4 + Math.sin((i / 20) + tm * 5) * 4;
+        ctx.fillRect(p.x + i, p.y, 4, grassHeight);
+      }
+
+      // 6. Animowane kwiatki (używają oryginalnego koloru p.color)
+      ctx.fillStyle = p.color;
+      for(let i = 12; i < p.w - 12; i += 32) {
+        // Kwiatki lekko "bujają się" góra-dół
+        const flowerY = Math.sin((i / 10) + tm * 3) * 2;
+        ctx.fillRect(p.x + i, p.y + 2 + flowerY, 6, 6);
+      }
+
+      ctx.restore();
+
+      // 7. Klasyczny, czarny obrys wokół całej platformy
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(p.x, p.y, p.w, p.h);
+    }
   }
   ctx.shadowBlur=0;
+
   for(const b of boxes)if(!b.broken&&b.x+b.w>cameraX&&b.x<cameraX+viewW)drawBox(b,tm);
   ctx.shadowBlur=5;ctx.shadowColor='#fff';ctx.fillStyle='#fff';
   for(const b of bones){
