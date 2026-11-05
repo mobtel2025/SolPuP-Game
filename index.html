@@ -151,10 +151,23 @@ let playerSpr=null,bossSpr=null,trawaPat=null,trawaImgReady=false;
 const playerImg=new Image();playerImg.onload=()=>{playerSpr=keyOut(playerImg);};playerImg.src='Aleks.jpg';
 const bossImg=new Image();bossImg.onload=()=>{bossSpr=keyOut(bossImg);};bossImg.src='Black.jpg';
 
-// Ładowanie nowej tekstury realistycznej trawy i ziemi (ZMIENIONE NA .jpg)
+// Ładowanie i PRZYCINANIE nowej tekstury
 const trawaImg = new Image();
 trawaImg.onload = () => {
-  trawaPat = ctx.createPattern(trawaImg, 'repeat');
+  // Tworzymy ukryte płótno, żeby obciąć "białe niebo" z góry obrazka
+  const tempCanvas = document.createElement('canvas');
+  // Obcinamy górne 28% obrazka (tam, gdzie jest białe tło)
+  const cropAmount = trawaImg.height * 0.28; 
+  
+  tempCanvas.width = trawaImg.width;
+  tempCanvas.height = trawaImg.height - cropAmount;
+  
+  const tctx = tempCanvas.getContext('2d');
+  // Rysujemy obrazek przesunięty w górę, aby puste tło znalazło się poza płótnem
+  tctx.drawImage(trawaImg, 0, -cropAmount);
+  
+  // Z takiego przyciętego obrazka robimy powtarzalny wzór
+  trawaPat = ctx.createPattern(tempCanvas, 'repeat');
   trawaImgReady = true;
 };
 trawaImg.src = 'trawa.jpg'; 
@@ -400,7 +413,6 @@ function update(now){
   player.vy+=.8;player.x+=player.vx;player.y+=player.vy;
   player.grounded=false;
   for(const p of platforms){
-    // Obniżenie płaszczyzny kolizji o 15 pikseli, aby fizyczne wejście w trawę wyglądało jak zanurzenie w gęstym poszyciu
     if(hit(player,p)&&player.vy>0&&player.y+player.height-player.vy<=p.y+16){
       player.y=p.y-player.height+15;player.vy=0;player.grounded=true;player.jumps=0;
       const cx=player.x+30;
@@ -553,35 +565,27 @@ function draw(){
     if(p.x+p.w>cameraX && p.x<cameraX+viewW){
       ctx.shadowBlur = 0; 
       
-      // Jeśli plik trawa.jpg został pomyślnie wczytany, renderujemy kafelkową, naturalną platformę 2D
       if (trawaImgReady) {
         ctx.save();
         
-        // --- CZĘŚĆ 1: Główny blok ziemi (dirt) na bazie nowej tekstury ---
+        // --- CZĘŚĆ 1: Główny blok ziemi (dirt) ---
         ctx.save();
         ctx.beginPath();
-        // Wycinamy bezpieczną maskę platformy - ziemię rysujemy 20 pikseli od góry, 
-        // tak aby u samej góry zostawić naturalny "szarpany" brzeg trawy
         ctx.rect(p.x, p.y + 20, p.w, p.h - 20);
         ctx.clip();
         ctx.fillStyle = trawaPat;
-        
-        // Rysujemy powielaną teksturę. Jako przesunięcie wzorca oznaczamy p.y, aby nie powstawały widoczne krawędzie
         ctx.translate(p.x, p.y);
         ctx.fillRect(0, 20, p.w, p.h - 20);
         ctx.restore();
 
-        // --- CZĘŚĆ 2: Animowane, gęste falowanie trawy (efekt wiatru na krawędzi) ---
+        // --- CZĘŚĆ 2: Animowane, gęste falowanie trawy ---
         ctx.save();
-        // Ścinamy (shear) oś X, aby góra źdźbeł trawy płynnie wyginała się pod naporem wiatru, 
-        // a ich spód pozostał solidnie i nieruchomo utwierdzony w gruncie.
         ctx.translate(p.x, p.y + 24); 
         const windAngle = Math.sin(tm * 2.4 + p.x * 0.007) * 0.12; 
         ctx.transform(1, 0, windAngle, 1, 0, 0); 
-        ctx.translate(0, -24); // Powrót na wyjściową pozycję krawędzi
+        ctx.translate(0, -24); 
 
         ctx.beginPath();
-        // Margines boczny z lewej i prawej strony (-15px), aby pochylająca się krawędź nie ulegała nienaturalnemu obcięciu
         ctx.rect(-15, 0, p.w + 30, 26);
         ctx.clip();
         ctx.fillStyle = trawaPat;
@@ -589,7 +593,7 @@ function draw(){
         ctx.fillRect(-15, 0, p.w + 30, 26);
         ctx.restore();
 
-        // Delikatny, ciemny, naturalny kontur dolnych i bocznych warstw podłoża
+        // Delikatny, ciemny kontur dolnych i bocznych warstw podłoża
         ctx.strokeStyle = 'rgba(28, 14, 7, 0.4)';
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -601,7 +605,6 @@ function draw(){
 
         ctx.restore();
       } else {
-        // Zapasowa, uproszczona stylizacja klasyczna z kwiatkami na wypadek, gdyby plik nie był dostępny
         ctx.fillStyle = '#8B4513';
         ctx.fillRect(p.x, p.y + 12, p.w, p.h - 12);
         ctx.fillStyle = '#228B22';
@@ -641,7 +644,6 @@ function draw(){
   if(!(inv>0&&inv%10<5)){
     ctx.save();ctx.translate(player.x+30,player.y+30);
     if(lastDir==='left')ctx.scale(-1,1);
-    // yo offset lekko podniesiony do 6 (zamiast 12), aby stopy były optycznie ukryte w górnej warstwie nowej gęstej trawy
     if(playerSpr)sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,6);
     else{ctx.fillStyle='#fff';ctx.fillRect(-30,-30,60,60);}
     ctx.restore();
