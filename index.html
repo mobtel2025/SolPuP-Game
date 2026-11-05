@@ -151,14 +151,13 @@ let playerSpr=null,bossSpr=null,trawaPat=null,trawaImgReady=false;
 const playerImg=new Image();playerImg.onload=()=>{playerSpr=keyOut(playerImg);};playerImg.src='Aleks.jpg';
 const bossImg=new Image();bossImg.onload=()=>{bossSpr=keyOut(bossImg);};bossImg.src='Black.jpg';
 
-// Ładowanie nowej tekstury realistycznej trawy i ziemi
+// Ładowanie nowej tekstury realistycznej trawy i ziemi (ZMIENIONE NA .jpg)
 const trawaImg = new Image();
 trawaImg.onload = () => {
-  // Przekształcamy załadowaną teksturę w powtarzalny wzór (pattern) w grze
   trawaPat = ctx.createPattern(trawaImg, 'repeat');
   trawaImgReady = true;
 };
-trawaImg.src = 'trawa.png'; // upewnij się, że ten plik leży w tym samym folderze, dopuszczalny jest też format .jpg
+trawaImg.src = 'trawa.jpg'; 
 
 /* ---------- stan ---------- */
 const GROUND=480,STEP=1000/60,MAXL=3;
@@ -549,12 +548,12 @@ function draw(){
   ctx.save();
   ctx.translate(-cameraX+(Math.random()-.5)*shake,(Math.random()-.5)*shake);
 
-  // Klasyczne platformy i ziemia na podstawie zaimportowanego zdjęcia (trawa.png)
+  // Klasyczne platformy i ziemia na podstawie zaimportowanego zdjęcia (trawa.jpg)
   for(const p of platforms){
     if(p.x+p.w>cameraX && p.x<cameraX+viewW){
       ctx.shadowBlur = 0; 
       
-      // Jeśli plik trawa.png został pomyślnie wczytany, renderujemy kafelkową, naturalną platformę 2D
+      // Jeśli plik trawa.jpg został pomyślnie wczytany, renderujemy kafelkową, naturalną platformę 2D
       if (trawaImgReady) {
         ctx.save();
         
