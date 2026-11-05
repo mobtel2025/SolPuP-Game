@@ -151,22 +151,20 @@ let playerSpr=null,bossSpr=null,trawaPat=null,trawaImgReady=false;
 const playerImg=new Image();playerImg.onload=()=>{playerSpr=keyOut(playerImg);};playerImg.src='Aleks.jpg';
 const bossImg=new Image();bossImg.onload=()=>{bossSpr=keyOut(bossImg);};bossImg.src='Black.jpg';
 
-// Ładowanie i PRZYCINANIE nowej tekstury
+// Ładowanie, przycinanie i skalowanie tekstury trawy
 const trawaImg = new Image();
 trawaImg.onload = () => {
-  // Tworzymy ukryte płótno, żeby obciąć "białe niebo" z góry obrazka
   const tempCanvas = document.createElement('canvas');
-  // Obcinamy górne 28% obrazka (tam, gdzie jest białe tło)
   const cropAmount = trawaImg.height * 0.28; 
   
-  tempCanvas.width = trawaImg.width;
-  tempCanvas.height = trawaImg.height - cropAmount;
+  // Zmniejszamy rozdzielczość tekstury o połowę, aby w grze była drobniejsza i ostrzejsza
+  const scaleFactor = 0.2; 
+  tempCanvas.width = trawaImg.width * scaleFactor;
+  tempCanvas.height = (trawaImg.height - cropAmount) * scaleFactor;
   
   const tctx = tempCanvas.getContext('2d');
-  // Rysujemy obrazek przesunięty w górę, aby puste tło znalazło się poza płótnem
-  tctx.drawImage(trawaImg, 0, -cropAmount);
+  tctx.drawImage(trawaImg, 0, -cropAmount * scaleFactor, trawaImg.width * scaleFactor, trawaImg.height * scaleFactor);
   
-  // Z takiego przyciętego obrazka robimy powtarzalny wzór
   trawaPat = ctx.createPattern(tempCanvas, 'repeat');
   trawaImgReady = true;
 };
