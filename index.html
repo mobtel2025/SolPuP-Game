@@ -151,28 +151,48 @@ let playerSpr=null,bossSpr=null,trawaPat=null,trawaImgReady=false;
 let zolwSpr=null;
 
 const playerImg=new Image();playerImg.onload=()=>{playerSpr=keyOut(playerImg);};playerImg.src='Aleks.jpg';
-// Przywrócono Blacki jako Bossa
 const bossImg=new Image();bossImg.onload=()=>{bossSpr=keyOut(bossImg);};bossImg.src='Black.jpg';
-// Dodano żółwia jako przeszkodę
 const zolwImg=new Image();zolwImg.onload=()=>{zolwSpr=keyOut(zolwImg);};zolwImg.src='zolw.jpg';
 
-// Ładowanie i przycinanie trawy
-const trawaImg = new Image();
-trawaImg.onload = () => {
-  const tempCanvas = document.createElement('canvas');
-  const cropAmount = trawaImg.height * 0.28; 
-  
-  const scaleFactor = 0.2; 
-  tempCanvas.width = trawaImg.width * scaleFactor;
-  tempCanvas.height = (trawaImg.height - cropAmount) * scaleFactor;
-  
-  const tctx = tempCanvas.getContext('2d');
-  tctx.drawImage(trawaImg, 0, -cropAmount * scaleFactor, trawaImg.width * scaleFactor, trawaImg.height * scaleFactor);
-  
-  trawaPat = ctx.createPattern(tempCanvas, 'repeat');
-  trawaImgReady = true;
-};
-trawaImg.src = 'trawa.jpg'; 
+// ==========================================
+// GENERATOR BAJKOWEJ TEKSTURY ZIEMI I TRAWY
+// (Zastępuje całkowicie plik trawa.jpg)
+// ==========================================
+const patCanvas = document.createElement('canvas');
+patCanvas.width = 128; patCanvas.height = 128;
+const pctx = patCanvas.getContext('2d', {willReadFrequently: true});
+
+// 1. Tło ziemi (ciepły kreskówkowy brąz)
+pctx.fillStyle = '#966F33';
+pctx.fillRect(0, 0, 128, 128);
+
+// 2. Duże, zaokrąglone kamienie w ziemi
+pctx.fillStyle = '#6b471c';
+const rocks = [[25, 75, 14], [95, 90, 18], [55, 120, 12], [115, 60, 10], [15, 110, 8]];
+rocks.forEach(r => { pctx.beginPath(); pctx.arc(r[0], r[1], r[2], 0, Math.PI*2); pctx.fill(); });
+// Jasne refleksy (oświetlenie) na kamieniach
+pctx.fillStyle = '#b58b4c';
+rocks.forEach(r => { pctx.beginPath(); pctx.arc(r[0]-r[2]*.25, r[1]-r[2]*.25, r[2]*.4, 0, Math.PI*2); pctx.fill(); });
+
+// 3. Zygzakowate przejście (ciemna zieleń pod trawą)
+pctx.fillStyle = '#2e7d32';
+pctx.beginPath();
+for(let i=0; i<=128; i+=16) pctx.lineTo(i, 26 + (i%32===0 ? 6 : 0));
+pctx.lineTo(128, 0); pctx.lineTo(0, 0); pctx.fill();
+
+// 4. Baza jasnej trawy
+pctx.fillStyle = '#4caf50';
+pctx.fillRect(0, 0, 128, 20);
+
+// 5. Grube, wektorowe źdźbła trawy (falujące na wietrze)
+pctx.fillStyle = '#a5d6a7';
+for(let i=10; i<128; i+=20) {
+  pctx.beginPath(); pctx.moveTo(i, 20); pctx.lineTo(i-6, 4); pctx.lineTo(i+6, 20); pctx.fill();
+}
+// Zapisujemy wzór do silnika gry
+trawaPat = ctx.createPattern(patCanvas, 'repeat');
+trawaImgReady = true;
+// ==========================================
 
 /* ---------- stan ---------- */
 const GROUND=480,STEP=1000/60,MAXL=3;
@@ -565,14 +585,10 @@ function sprite(img,fr,row,dw,dh,yo){
   const fw=img.width/4,fh=img.height/3;
   ctx.drawImage(img,fr*fw,row*fh,fw,fh,-dw/2,-dh/2+(yo||0),dw,dh);
 }
-// SPECJALNE RYSOWANIE ŻÓŁWIA: wycinanie tylko dolnych klatek animacji
 function spriteZolw(img,fr,dw,dh,yo){
   const fw = img.width / 4;
-  // Zakładamy, że klatki animacji na obrazku żółwia zajmują dolne 25% jego całkowitej wysokości
   const fHeightOriginal = img.height * 0.25; 
-  // Odsunięcie Y, aby zacząć wycinanie dopiero od dolnych 75% obrazka (pomijając duży obrazek u góry)
   const sourceY = img.height * 0.75; 
-  
   ctx.drawImage(img, fr * fw, sourceY, fw, fHeightOriginal, -dw/2, -dh/2+(yo||0), dw, dh);
 }
 
@@ -659,14 +675,6 @@ function draw(){
         ctx.stroke();
 
         ctx.restore();
-      } else {
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(p.x, p.y + 12, p.w, p.h - 12);
-        ctx.fillStyle = '#228B22';
-        ctx.fillRect(p.x, p.y, p.w, 12);
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2.5;
-        ctx.strokeRect(p.x, p.y, p.w, p.h);
       }
     }
   }
@@ -698,7 +706,6 @@ function draw(){
     ctx.restore();
   }
 
-  // Rysowanie Żółwi za pomocą nowej funkcji
   for (const t of turtles) {
     if(t.x + t.width > cameraX && t.x < cameraX + viewW) {
       ctx.save();ctx.translate(t.x + t.width/2, t.y + t.height/2);
