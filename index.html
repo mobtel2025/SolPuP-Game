@@ -395,8 +395,11 @@ function breakBox(bx){
   const cx=bx.x+bx.w/2,cy=bx.y+bx.h/2;
   burst(cx,cy,'#ffd84a',14);burst(cx,cy,'#ff9a1f',10);burst(cx,cy,'#ffffff',5);
   
-  let specialType = Math.random() < 0.5 ? 'tree' : 'heart';
-  bones.push({x:cx-15,y:bx.y-10,width:30,height:30,collected:false,pop:true,vx:(Math.random()-.5)*2,vy:-10,delay:14,type:specialType});
+  // Zmiana: Szansa na moc wynosi 15%, aby gra nie była zbyt prosta
+  if(Math.random() < 0.15) {
+    let specialType = Math.random() < 0.5 ? 'tree' : 'heart';
+    bones.push({x:cx-15,y:bx.y-10,width:30,height:30,collected:false,pop:true,vx:(Math.random()-.5)*2,vy:-10,delay:14,type:specialType});
+  }
   for(let i=0;i<bx.n;i++)bones.push({x:cx-15,y:bx.y-10,width:30,height:20,collected:false,pop:true,vx:(i-(bx.n-1)/2)*2.4+(Math.random()-.5),vy:-9-Math.random()*3,delay:14,type:'bone'});
 }
 function levelDone(){
@@ -425,7 +428,7 @@ $('btnSubmit').onclick=()=>{
 };
 $('btnRestart').onclick=()=>{$('lbScreen').style.display='none';startLevel(1,true);};
 
-// Uniwersalna detekcja kolizji wykorzystująca width/height obiektów
+// Uniwersalna detekcja kolizji wykorzystująca width/height
 const hit=(a,b)=>a.x<b.x+(b.width||b.w)&&a.x+(a.width||a.w)>b.x&&a.y<b.y+(b.height||b.h)&&a.y+(a.height||a.h)>b.y;
 const hitB=(a,b)=>a.x<b.x+b.w&&a.x+a.width>b.x&&a.y<b.y+b.h&&a.y+a.height>b.y;
 
@@ -784,9 +787,10 @@ function draw(){
     }
   }
 
-  // Rysowanie gracza i efektów
+  // Rysowanie gracza z nowym filtrem, zamiast kwadratu źródłowego
   let skipDraw = false;
   if(inv>0 && inv%10<5 && giantTimer === 0) skipDraw = true; 
+  if(heartShootTimer > 0 && heartShootTimer % 10 < 5) skipDraw = true; 
   
   if(!skipDraw){
     ctx.save();ctx.translate(player.x + player.width/2, player.y + player.height/2);
@@ -794,17 +798,12 @@ function draw(){
     let yOff = (player.width === 120) ? 12 : 6;
     
     if(playerSpr) {
-      sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,yOff);
-      
-      // Magiczny, animowany tęczowy filtr ukrywający pikselozę!
+      // NOWE: Animowany tęczowy filtr ukrywający pikselozę pieska!
       if (giantTimer > 0 || heartShootTimer > 0) {
-        ctx.globalCompositeOperation = 'source-atop';
-        ctx.fillStyle = `hsl(${(tm * 800) % 360}, 100%, 50%)`;
-        ctx.globalAlpha = 0.5;
-        ctx.fillRect(-player.width/2, -player.height/2 + yOff, player.width, player.height);
-        ctx.globalAlpha = 1.0;
-        ctx.globalCompositeOperation = 'source-over';
+        ctx.filter = `hue-rotate(${Math.floor(tm * 800) % 360}deg) saturate(200%) brightness(1.2)`;
       }
+      sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,yOff);
+      ctx.filter = 'none'; // Konieczne wyłączenie filtra po narysowaniu pieska
     } else {
       ctx.fillStyle='#fff'; ctx.fillRect(-player.width/2,-player.height/2,player.width,player.height);
     }
