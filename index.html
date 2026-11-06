@@ -638,13 +638,11 @@ function spriteZolw(img,fr,dw,dh,yo){
   const fw = img.width / 4;
   const fHeightOriginal = img.height * 0.25; 
   const sourceY = img.height * 0.75; 
-  // Wycinanie bocznych zanieczyszczeń klatek by wykluczyć dziwne piksele obok żółwia
-  const cropMarginX = 8; const cropMarginY = 6;
   
   ctx.drawImage(
     img, 
-    fr * fw + cropMarginX, sourceY + cropMarginY, 
-    fw - cropMarginX * 2, fHeightOriginal - cropMarginY * 2, 
+    fr * fw, sourceY, 
+    fw, fHeightOriginal, 
     -dw/2, -dh/2 + (yo||0), dw, dh
   );
 }
@@ -678,6 +676,7 @@ function drawBox(b,tm){
 function draw(){
   const tm=performance.now()/1000;
   ctx.setTransform(dpr,0,0,dpr,0,0);
+  // Wyłączamy wygładzanie globalnie - to sprawia, że pixel art, tła i żółwie są wyraźne
   ctx.imageSmoothingEnabled=false;
   const W=canvas.width/dpr,H=canvas.height/dpr;
   ctx.fillStyle=level===1?'#7ac5e8':level===2?'#e8a56a':'#2a1d4a';ctx.fillRect(0,0,W,H);
@@ -695,10 +694,8 @@ function draw(){
   for(const p of platforms){
     if(p.x+p.w>cameraX && p.x<cameraX+viewW){
       ctx.shadowBlur = 0; 
-      
       if (trawaImgReady) {
         ctx.save();
-        
         ctx.save();
         ctx.beginPath();
         ctx.rect(p.x, p.y + 20, p.w, p.h - 20);
@@ -787,7 +784,7 @@ function draw(){
     }
   }
 
-  // Rysowanie gracza z nowym filtrem, zamiast kwadratu źródłowego
+  // RYSOWANIE GRACZA
   let skipDraw = false;
   if(inv>0 && inv%10<5 && giantTimer === 0) skipDraw = true; 
   if(heartShootTimer > 0 && heartShootTimer % 10 < 5) skipDraw = true; 
@@ -798,12 +795,22 @@ function draw(){
     let yOff = (player.width === 120) ? 12 : 6;
     
     if(playerSpr) {
-      // NOWE: Animowany tęczowy filtr ukrywający pikselozę pieska!
+      // WŁĄCZAMY SPRZĘTOWE WYGŁADZANIE TYLKO DLA PIESKA! To usunie "poszarpane schodki" podczas bycia Super Pieskiem
+      ctx.imageSmoothingEnabled = true;
+
+      // Nowy efekt filtru i świecącej AURY ukrywającej niedoskonałości
       if (giantTimer > 0 || heartShootTimer > 0) {
         ctx.filter = `hue-rotate(${Math.floor(tm * 800) % 360}deg) saturate(200%) brightness(1.2)`;
+        ctx.shadowColor = `hsl(${(tm * 800) % 360}, 100%, 60%)`;
+        ctx.shadowBlur = 30; // Piękna poświata dla Super Psa
       }
+
       sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,yOff);
-      ctx.filter = 'none'; // Konieczne wyłączenie filtra po narysowaniu pieska
+      
+      // Reset filtrów, cieni i wygładzania na sam koniec
+      ctx.filter = 'none';
+      ctx.shadowBlur = 0;
+      ctx.imageSmoothingEnabled = false;
     } else {
       ctx.fillStyle='#fff'; ctx.fillRect(-player.width/2,-player.height/2,player.width,player.height);
     }
