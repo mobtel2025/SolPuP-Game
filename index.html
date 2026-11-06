@@ -5,9 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Solpup</title>
 <style>
+/* Zmodyfikowany CSS wymuszający brak zoomu na elementach dotykowych */
+* { touch-action: manipulation; }
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#7ac5e8;font-family:'Segoe UI',Tahoma,Verdana,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
 canvas{display:block;width:100%;height:100%}
-#hud{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:0;width:100%;display:flex;justify-content:space-between;padding:0 16px;box-sizing:border-box;z-index:15;pointer-events:none}
+
+/* ZMIANA: position: fixed zapewnia, że interfejs nigdy nie wyjedzie za ekran na iOS */
+#hud{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:0;width:100%;display:flex;justify-content:space-between;padding:0 16px;box-sizing:border-box;z-index:15;pointer-events:none}
 .panel{background:rgba(0,0,0,.5);padding:8px 12px;border-radius:8px;border:1px solid rgba(0,255,255,.3);color:#fff;min-width:120px}
 .panel b{display:block;font-size:13px;text-transform:uppercase;margin-bottom:3px}
 .hearts{font-size:22px;line-height:1;letter-spacing:3px;color:#ff0055;text-shadow:0 0 6px #ff0055}
@@ -15,16 +19,22 @@ canvas{display:block;width:100%;height:100%}
 #bossPanel{display:none;border-color:rgba(255,51,0,.5)}
 #bossPanel .hearts{color:#ff3300;text-shadow:0 0 6px #ff3300}
 #bossPanel b{color:#ff3300}
-#score{position:absolute;top:calc(78px + env(safe-area-inset-top,0px));width:100%;text-align:center;color:#0ff;font-size:24px;font-weight:bold;z-index:14;text-shadow:0 0 8px #000,0 0 4px #000;pointer-events:none}
+
+#score{position:fixed;top:calc(78px + env(safe-area-inset-top,0px));width:100%;text-align:center;color:#0ff;font-size:24px;font-weight:bold;z-index:14;text-shadow:0 0 8px #000,0 0 4px #000;pointer-events:none}
 #combo{display:block;font-size:16px;color:#ff0;min-height:20px}
-#hint{position:absolute;top:40%;width:100%;text-align:center;color:#fff;font-size:24px;font-weight:bold;z-index:14;text-shadow:0 0 8px #000;pointer-events:none;opacity:0;transition:opacity .4s;padding:0 20px;box-sizing:border-box}
-.ctrl{position:absolute;bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:10;display:flex;gap:10px}
-#cl{left:calc(10px + env(safe-area-inset-left,0px))}#cr{right:calc(18px + env(safe-area-inset-right,0px))}
+#hint{position:fixed;top:40%;width:100%;text-align:center;color:#fff;font-size:24px;font-weight:bold;z-index:14;text-shadow:0 0 8px #000;pointer-events:none;opacity:0;transition:opacity .4s;padding:0 20px;box-sizing:border-box}
+
+.ctrl{position:fixed;bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:10;display:flex;gap:10px}
+#cl{left:calc(10px + env(safe-area-inset-left,0px))}
+#cr{right:calc(18px + env(safe-area-inset-right,0px))}
 .btn{width:72px;height:72px;background:rgba(0,0,0,.4);border:2px solid #0ff;color:#0ff;font-size:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 15px rgba(0,255,255,.5);-webkit-tap-highlight-color:transparent;touch-action:none}
 .btn.on{background:rgba(0,255,255,.4);transform:scale(.95)}
-#topBtns{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:16;display:flex;gap:8px}
+
+#topBtns{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:16;display:flex;gap:8px}
 #topBtns button{width:42px;height:42px;font-size:20px;border-radius:50%;border:1px solid rgba(0,255,255,.4);background:rgba(0,0,0,.5);color:#fff;-webkit-tap-highlight-color:transparent}
-.overlay{position:absolute;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:20;color:#0ff;text-align:center;padding:16px;box-sizing:border-box}
+
+/* ZMIANA: position: fixed zapobiega rozjeżdżaniu się planszy na boki przy wpisywaniu tekstu */
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:20;color:#0ff;text-align:center;padding:16px;box-sizing:border-box}
 .overlay h1{text-shadow:0 0 15px #0ff;margin:0 0 14px;font-size:38px}
 .overlay p{font-size:20px;margin:0 0 14px}
 .overlay input{padding:10px;font-size:20px;border:2px solid #0ff;background:rgba(0,0,0,.5);color:#fff;border-radius:5px;text-align:center;margin-bottom:14px;outline:none;user-select:auto;-webkit-user-select:auto}
@@ -99,6 +109,21 @@ canvas{display:block;width:100%;height:100%}
 <div id="pauseScreen" class="overlay"><h1 data-i="pause"></h1><p data-i="pauseHint"></p></div>
 
 <script>
+// ---------- BLOKADA ZOOMU NA iOS (Safari) ----------
+document.addEventListener('gesturestart', function(e) {
+  e.preventDefault();
+});
+let lastTouchEnd = 0;
+document.addEventListener('touchend', function(e) {
+  if(e.target.tagName === 'INPUT') return;
+  const now = (new Date()).getTime();
+  if(now - lastTouchEnd <= 300) {
+    e.preventDefault();
+  }
+  lastTouchEnd = now;
+}, { passive: false });
+// ---------------------------------------------------
+
 const $=id=>document.getElementById(id);
 const canvas=$('c'),ctx=canvas.getContext('2d');
 
@@ -185,7 +210,7 @@ const CFG={
   2:{size:70,lives:4,sp:3.5,add:1.1,jump:.020,jv:-13},
   3:{size:85,lives:5,sp:4.0,add:1.2,jump:.025,jv:-14},
   4:{size:100,lives:6,sp:4.5,add:1.3,jump:.030,jv:-15},
-  5:{size:130,lives:3} // Nieskończony poziom bossa
+  5:{size:130,lives:3} 
 };
 const COLS=['#ff00ff','#00ffff','#00ff00','#ffff00','#ff0000','#ff9900'];
 const keys={};
@@ -262,13 +287,13 @@ function genChunk(){
   
   if(Math.random() < 0.4) spawnTurtle(g);
   if(Math.random() < 0.35) spawnBee(g); 
-  if(Math.random() < 0.5) spawnRose(g); // 50% na różę z losowego kawałka platformy!
+  if(Math.random() < 0.5) spawnRose(g); 
 
   let x=gx+80;const n=2+Math.floor(Math.random()*2);
   for(let i=0;i<n&&x<gx+w-100;i++){
     const p=addPlat(x,GROUND-50-rnd(110,240),rnd(90,140),20,pick(COLS));
     if(Math.random()<.7)addBones(p,1+Math.floor(Math.random()*2));
-    if(Math.random()<.3)spawnRose(p); // 30% szans, że róża pojawi się nawet na małych zawieszonych kładkach!
+    if(Math.random()<.3)spawnRose(p); 
     x+=rnd(170,270);
   }
   if(Math.random()<.5)addBones(g,1);
@@ -298,16 +323,12 @@ function buildLevel(){
     spawnTurtle(platforms[2]);
     spawnBee(platforms[1]); 
     
-    // ZAGWARANTOWANE CO NAJMNIEJ 3 RÓŻE NA LEVELU 1
     spawnRose(platforms[1]);
     spawnRose(platforms[2]);
     spawnRose(platforms[5]);
     
-    // ORAZ DODATKOWE LOSOWE RÓŻE!
     for(let i=1; i<platforms.length; i++) {
-      if(platforms[i] !== arena && Math.random() < 0.5) { // 50% szans dla każdej platformy
-        spawnRose(platforms[i]);
-      }
+      if(platforms[i] !== arena && Math.random() < 0.5) spawnRose(platforms[i]);
     }
   }else if(level < MAXL){
     addPlat(0,GROUND-50,1000,50,'#ff00ff');genX=1000;
