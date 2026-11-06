@@ -311,7 +311,7 @@ function trim(){
   }
 }
 
-/* ---------- dźwięk ---------- */
+/* ---------- Dźwięk & Muzyka ---------- */
 let audioCtx,beatStep=0,lastBeat=0;
 function initAudio(){
   try{
@@ -330,16 +330,39 @@ function tone(type,f1,f2,dur,vol,ramp){
 const sBone=()=>tone('triangle',600,1200,.1,.2,'exp'),sJump=()=>tone('sine',300,600,.1,.1,'exp'),
       sHurt=()=>tone('sawtooth',150,60,.15,.3),sStomp=()=>tone('square',350,50,.35,.35,'exp'),
       sBox=()=>{tone('square',220,520,.12,.25,'exp');setTimeout(()=>tone('triangle',700,1400,.15,.2,'exp'),70);};
+
 function playBeat(){
   if(!audioCtx||muted)return;
-  try{const tt=audioCtx.currentTime;
-    const ch=[[261.63,329.63,392],[220,261.63,329.63],[174.61,220,261.63],[196,246.94,293.66]];
-    if(beatStep%4===0)ch[Math.floor(beatStep/4)%4].forEach(f=>{
-      const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(f,tt);
-      o.connect(g);g.connect(audioCtx.destination);g.gain.setValueAtTime(0,tt);
-      g.gain.linearRampToValueAtTime(.1,tt+.5);g.gain.linearRampToValueAtTime(0,tt+2);o.start(tt);o.stop(tt+2);});
-    beatStep++;}catch(e){}
+  try{
+    const tt=audioCtx.currentTime;
+    const step = beatStep % 16;
+    
+    if (!bossOn) {
+      // Szybka, wesoła muzyka (C major)
+      const bassFreq = (step < 8) ? 130.81 : (step < 12 ? 174.61 : 196.00); 
+      tone('square', bassFreq, bassFreq, 0.15, 0.08, 'lin');
+      
+      const arp = [523.25, 659.25, 783.99, 1046.50]; 
+      if (step % 2 === 0) {
+        tone('sine', arp[(step/2)%4], arp[(step/2)%4], 0.1, 0.06, 'lin');
+      }
+      if (step % 2 !== 0) {
+        tone('square', 6000, 2000, 0.05, 0.03, 'exp'); // hi-hat
+      }
+    } else {
+      // Mroczna muzyka Bossa (Dissonansowa)
+      const bossBass = [65.41, 65.41, 77.78, 65.41, 92.50, 65.41, 77.78, 65.41];
+      const note = bossBass[step % 8];
+      tone('sawtooth', note, note*0.9, 0.2, 0.15, 'exp');
+      
+      if (step % 4 === 0) {
+        tone('square', 622.25, 587.33, 0.3, 0.05, 'exp'); 
+      }
+    }
+    beatStep++;
+  }catch(e){}
 }
+
 $('mute').addEventListener('click',()=>{
   muted=!muted;$('mute').textContent=muted?'🔇':'🔊';
   if(audioCtx){(muted||paused)?audioCtx.suspend():audioCtx.resume();}
@@ -445,11 +468,13 @@ $('btnSubmit').onclick=()=>{
 };
 $('btnRestart').onclick=()=>{$('lbScreen').style.display='none';startLevel(1,true);};
 
+// Uniwersalna detekcja kolizji wykorzystująca width/height
 const hit=(a,b)=>a.x<b.x+(b.width||b.w)&&a.x+(a.width||a.w)>b.x&&a.y<b.y+(b.height||b.h)&&a.y+(a.height||a.h)>b.y;
 const hitB=(a,b)=>a.x<b.x+b.w&&a.x+a.width>b.x&&a.y<b.y+b.h&&a.y+a.height>b.y;
 
 function update(now){
-  if(audioCtx&&!muted&&now-lastBeat>500){playBeat();lastBeat=now;beatFlash=(beatStep%4===1)?.5:.1;}
+  // MUZYKA: 250ms interval, by loop był szybszy i rytmiczny
+  if(audioCtx&&!muted&&now-lastBeat>250){playBeat();lastBeat=now;beatFlash=(beatStep%4===1)?.5:.1;}
   if(beatFlash>0)beatFlash-=.01;
   if(inv>0)inv--;if(bossInv>0)bossInv--;if(kb>0)kb--;if(shake>0)shake*=.85;
   if(comboT>0&&--comboT===0){combo=0;updateScore();}
@@ -504,7 +529,6 @@ function update(now){
   }
   projectiles = projectiles.filter(p => p.life > 0);
 
-  // LOGIKA PSZCZÓŁ
   for (const b of bees) {
     if (b.dead) continue;
     
@@ -863,36 +887,41 @@ function draw(){
       ctx.save();
       ctx.translate(b.x + b.width / 2, b.y + b.height / 2);
       if (b.lastDir === 'right') ctx.scale(-1, 1);
-      ctx.rotate(Math.sin(tm * 30) * 0.15); // Szybkie bzyczenie
+      ctx.rotate(Math.sin(tm * 30) * 0.15); 
       ctx.font = '50px "Segoe UI", Arial'; ctx.textAlign = 'center'; ctx.textBaseline='middle';
       ctx.fillText('🐝', 0, 0);
       ctx.restore();
     }
   }
 
+  // OPTYMALIZACJA I WYGŁADZANIE GRACZA
   let skipDraw = false;
   if(inv>0 && inv%10<5 && giantTimer === 0) skipDraw = true; 
   if(heartShootTimer > 0 && heartShootTimer % 10 < 5) skipDraw = true; 
   
   if(!skipDraw){
-    ctx.save();ctx.translate(player.x + player.width/2, player.y + player.height/2);
+    ctx.save();
+    ctx.translate(player.x + player.width/2, player.y + player.height/2);
     if(lastDir==='left')ctx.scale(-1,1);
+    
     let yOff = (player.width === 120) ? 12 : 6;
     
     if(playerSpr) {
-      ctx.imageSmoothingEnabled = true;
-
+      // 1. Malowanie bardzo szybkiej, świetlistej aury bez używania CPU-żernych filtrów
       if (giantTimer > 0 || heartShootTimer > 0) {
-        ctx.filter = `hue-rotate(${Math.floor(tm * 800) % 360}deg) saturate(200%) brightness(1.2)`;
-        ctx.shadowColor = `hsl(${(tm * 800) % 360}, 100%, 60%)`;
-        ctx.shadowBlur = 30; 
+        ctx.save();
+        ctx.globalAlpha = 0.6 + Math.sin(tm * 10) * 0.2; // aura pulsuje
+        ctx.fillStyle = `hsl(${(tm * 800) % 360}, 100%, 60%)`;
+        ctx.beginPath();
+        ctx.arc(0, yOff, player.width * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
 
+      // 2. Włączenie sprzętowego wygładzania na sam moment rysowania Pieska
+      ctx.imageSmoothingEnabled = true;
       sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,yOff);
-      
-      ctx.filter = 'none';
-      ctx.shadowBlur = 0;
-      ctx.imageSmoothingEnabled = false;
+      ctx.imageSmoothingEnabled = false; // Od razu wyłączamy, by tło zostało ostre
     } else {
       ctx.fillStyle='#fff'; ctx.fillRect(-player.width/2,-player.height/2,player.width,player.height);
     }
