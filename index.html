@@ -529,6 +529,7 @@ function update(now){
   }
   projectiles = projectiles.filter(p => p.life > 0);
 
+  // LOGIKA PSZCZÓŁ
   for (const b of bees) {
     if (b.dead) continue;
     
@@ -907,20 +908,27 @@ function draw(){
     let yOff = (player.width === 120) ? 12 : 6;
     
     if(playerSpr) {
-      // 1. Malowanie bardzo szybkiej, świetlistej aury bez używania CPU-żernych filtrów
+      // Włączenie sprzętowego wygładzania na sam moment rysowania Pieska
+      ctx.imageSmoothingEnabled = true;
+
       if (giantTimer > 0 || heartShootTimer > 0) {
-        ctx.save();
-        ctx.globalAlpha = 0.6 + Math.sin(tm * 10) * 0.2; // aura pulsuje
-        ctx.fillStyle = `hsl(${(tm * 800) % 360}, 100%, 60%)`;
-        ctx.beginPath();
-        ctx.arc(0, yOff, player.width * 0.6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        // Efekt wibrujących "duchów" z energii (zamiast brzydkiego koła)
+        ctx.globalAlpha = 0.4;
+        ctx.globalCompositeOperation = 'lighter';
+        
+        let gx = Math.sin(tm * 15) * (player.width === 120 ? 10 : 5);
+        let gy = Math.cos(tm * 20) * (player.width === 120 ? 10 : 5);
+        
+        sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,yOff + gy);
+        sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,yOff - gy);
+        
+        ctx.globalAlpha = 1.0;
+        ctx.globalCompositeOperation = 'source-over';
       }
 
-      // 2. Włączenie sprzętowego wygładzania na sam moment rysowania Pieska
-      ctx.imageSmoothingEnabled = true;
+      // Rysowanie właściwego pieska
       sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,yOff);
+      
       ctx.imageSmoothingEnabled = false; // Od razu wyłączamy, by tło zostało ostre
     } else {
       ctx.fillStyle='#fff'; ctx.fillRect(-player.width/2,-player.height/2,player.width,player.height);
