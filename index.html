@@ -154,7 +154,7 @@ const playerImg=new Image();playerImg.onload=()=>{playerSpr=keyOut(playerImg);};
 const bossImg=new Image();bossImg.onload=()=>{bossSpr=keyOut(bossImg);};bossImg.src='Black.jpg';
 const zolwImg=new Image();zolwImg.onload=()=>{zolwSpr=keyOut(zolwImg);};zolwImg.src='zolw.jpg';
 
-// Generator proceduralnej trawy 
+// Generator proceduralnej trawy (Kreskówkowa Ziemia)
 const patCanvas = document.createElement('canvas');
 patCanvas.width = 128; patCanvas.height = 128;
 const pctx = patCanvas.getContext('2d', {willReadFrequently: true});
@@ -189,7 +189,7 @@ let distScore=0,boneScore=0,score=0,maxX=100,combo=0,comboT=0;
 let lives=MAXL,bossLives=3,bossOn=false,bossInv=0,inv=0,kb=0;
 let coyote=0,jumpBuf=0,jumpWas=false,safe={x:100,y:200},muted=false;
 let particles=[],platforms=[],bones=[],boxes=[],turtles=[],projectiles=[],topScores=[];
-let giantTimer = 0, heartShootTimer = 0; // Nowe Powerupy
+let giantTimer = 0, heartShootTimer = 0; 
 
 try{topScores=JSON.parse(localStorage.getItem('neonJumperTopScores'))||[];if(!Array.isArray(topScores))topScores=[]}catch(e){topScores=[]}
 
@@ -201,7 +201,7 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
 
 /* ---------- generowanie poziomów ---------- */
 function addPlat(x,y,w,h,color){const p={x,y,w,h,color};platforms.push(p);return p;}
-function addBones(p,n){for(let j=0;j<n;j++)bones.push({x:p.x+20+Math.random()*Math.max(0,p.w-50),y:p.y-40-Math.random()*60,w:30,h:20,collected:false,type:'bone'});}
+function addBones(p,n){for(let j=0;j<n;j++)bones.push({x:p.x+20+Math.random()*Math.max(0,p.w-50),y:p.y-40-Math.random()*60,width:30,height:20,collected:false,type:'bone'});}
 function boxFree(x,y){
   const r={x:x-20,y:y-20,w:84,h:84};
   return !platforms.some(f=>f.y<GROUND-60&&r.x<f.x+f.w&&r.x+r.w>f.x&&r.y<f.y+f.h&&r.y+r.h>f.y)&&!boxes.some(b=>Math.abs(b.x-x)<170);
@@ -384,7 +384,7 @@ function startLevel(n,fresh){
 }
 function burst(x,y,color,n){for(let i=0;i<n;i++)particles.push({x,y,vx:(Math.random()-.5)*8,vy:(Math.random()-.9)*7,life:30+Math.random()*20,color});}
 function hurt(dir){
-  if(inv>0)return; // Jeśli gigant, inv stale jest odnawiany
+  if(inv>0)return; 
   lives--;inv=90;sHurt();shake=8;updateHUD();combo=0;updateScore();
   player.vy=-8;player.vx=dir*9;kb=12;
   burst(player.x+player.width/2,player.y+player.height/2,'#ff0055',14);
@@ -395,11 +395,9 @@ function breakBox(bx){
   const cx=bx.x+bx.w/2,cy=bx.y+bx.h/2;
   burst(cx,cy,'#ffd84a',14);burst(cx,cy,'#ff9a1f',10);burst(cx,cy,'#ffffff',5);
   
-  // Wyskakuje powerup
   let specialType = Math.random() < 0.5 ? 'tree' : 'heart';
-  bones.push({x:cx-15,y:bx.y-10,w:30,h:30,collected:false,pop:true,vx:(Math.random()-.5)*2,vy:-10,delay:14,type:specialType});
-  // Wyskakują standardowe kości
-  for(let i=0;i<bx.n;i++)bones.push({x:cx-15,y:bx.y-10,w:30,h:20,collected:false,pop:true,vx:(i-(bx.n-1)/2)*2.4+(Math.random()-.5),vy:-9-Math.random()*3,delay:14,type:'bone'});
+  bones.push({x:cx-15,y:bx.y-10,width:30,height:30,collected:false,pop:true,vx:(Math.random()-.5)*2,vy:-10,delay:14,type:specialType});
+  for(let i=0;i<bx.n;i++)bones.push({x:cx-15,y:bx.y-10,width:30,height:20,collected:false,pop:true,vx:(i-(bx.n-1)/2)*2.4+(Math.random()-.5),vy:-9-Math.random()*3,delay:14,type:'bone'});
 }
 function levelDone(){
   boneScore+=500*level;updateScore();state='between';
@@ -427,7 +425,8 @@ $('btnSubmit').onclick=()=>{
 };
 $('btnRestart').onclick=()=>{$('lbScreen').style.display='none';startLevel(1,true);};
 
-const hit=(a,b)=>a.x<b.x+(b.w??b.width)&&a.x+a.width>b.x&&a.y<b.y+(b.h??b.height)&&a.y+a.height>b.y;
+// Uniwersalna detekcja kolizji wykorzystująca width/height obiektów
+const hit=(a,b)=>a.x<b.x+(b.width||b.w)&&a.x+(a.width||a.w)>b.x&&a.y<b.y+(b.height||b.h)&&a.y+(a.height||a.h)>b.y;
 const hitB=(a,b)=>a.x<b.x+b.w&&a.x+a.width>b.x&&a.y<b.y+b.h&&a.y+a.height>b.y;
 
 function update(now){
@@ -436,17 +435,15 @@ function update(now){
   if(inv>0)inv--;if(bossInv>0)bossInv--;if(kb>0)kb--;if(shake>0)shake*=.85;
   if(comboT>0&&--comboT===0){combo=0;updateScore();}
 
-  // Logika Giganta
   if(giantTimer > 0) {
     giantTimer--;
-    inv = Math.max(inv, 10); // Stała niewrażliwość
+    inv = Math.max(inv, 10); 
     if(giantTimer === 0) {
       player.width = 60; player.height = 60; 
       showHint("Koniec bycia gigantem");
     }
   }
 
-  // Logika Strzelania Sercami
   if(heartShootTimer > 0) {
     heartShootTimer--;
     if(heartShootTimer % 15 === 0) {
@@ -454,23 +451,21 @@ function update(now){
         x: lastDir === 'right' ? player.x + player.width : player.x - 20,
         y: player.y + player.height/2 - 10,
         vx: lastDir === 'right' ? 12 : -12,
-        w: 24, h: 24, life: 60
+        width: 24, height: 24, life: 60
       });
       tone('sine', 800, 1200, 0.1, 0.1, 'lin');
     }
   }
 
-  // Pociski serc
+  // Kolizje pocisków serduszkowych
   for (const pr of projectiles) {
     pr.x += pr.vx; pr.life--;
-    // Trafienie w żółwia
     for (const t of turtles) {
       if (!t.dead && hit(pr, t)) {
         t.dead = true; burst(t.x + t.width/2, t.y + t.height/2, '#2e5c1e', 14);
         boneScore += 100; updateScore(); pr.life = 0;
       }
     }
-    // Trafienie w Bossa
     if (bossOn && bossLives > 0 && hit(pr, boss)) {
       if (bossInv === 0) {
         if(level !== 3) {
@@ -590,8 +585,8 @@ function update(now){
     const py=b.y;b.y+=b.vy;
     if(b.delay>0)b.delay--;
     if(b.vy>0)for(const p of platforms){
-      if(b.x+b.w>p.x&&b.x<p.x+p.w&&b.y+b.h>=p.y&&py+b.h<=p.y+4){
-        b.y=p.y-b.h;b.vy=-b.vy*.35;
+      if(b.x+b.width>p.x&&b.x<p.x+p.w&&b.y+b.height>=p.y&&py+b.height<=p.y+4){
+        b.y=p.y-b.height;b.vy=-b.vy*.35;
         if(Math.abs(b.vy)<2){b.vy=0;b.vx=0;b.pop=false;}
         break;
       }
@@ -640,8 +635,8 @@ function spriteZolw(img,fr,dw,dh,yo){
   const fw = img.width / 4;
   const fHeightOriginal = img.height * 0.25; 
   const sourceY = img.height * 0.75; 
-  // Dodane wewnętrzne marginesy obcinania dla czystej animacji
-  const cropMarginX = 2; const cropMarginY = 2;
+  // Wycinanie bocznych zanieczyszczeń klatek by wykluczyć dziwne piksele obok żółwia
+  const cropMarginX = 8; const cropMarginY = 6;
   
   ctx.drawImage(
     img, 
@@ -742,9 +737,8 @@ function draw(){
   for(const b of boxes)if(!b.broken&&b.x+b.w>cameraX&&b.x<cameraX+viewW)drawBox(b,tm);
   ctx.shadowBlur=5;ctx.shadowColor='#fff';ctx.fillStyle='#fff';
   
-  // Rysowanie kości i Powerupów
   for(const b of bones){
-    if(!b.collected&&b.x+b.w>cameraX&&b.x<cameraX+viewW){
+    if(!b.collected&&b.x+b.width>cameraX&&b.x<cameraX+viewW){
       if(b.type === 'bone') {
         ctx.beginPath();
         for(const [dx,dy] of [[6,6],[6,14],[24,6],[24,14]]){ctx.moveTo(b.x+dx+6,b.y+dy);ctx.arc(b.x+dx,b.y+dy,6,0,7);}
@@ -760,10 +754,9 @@ function draw(){
   }
   ctx.shadowBlur=0;
 
-  // Rysowanie strzelanych serc
   ctx.font = '24px "Segoe UI", Arial'; ctx.textAlign = 'center'; ctx.textBaseline='middle';
   for(const pr of projectiles) {
-    ctx.fillText('❤️', pr.x + pr.w/2, pr.y + pr.h/2);
+    ctx.fillText('❤️', pr.x + pr.width/2, pr.y + pr.height/2);
   }
 
   if(bossOn&&arena){
@@ -784,7 +777,6 @@ function draw(){
   for (const t of turtles) {
     if(t.x + t.width > cameraX && t.x < cameraX + viewW) {
       ctx.save();ctx.translate(t.x + t.width/2, t.y + t.height/2);
-      // Naprawa: Żółw z domyślnego pliku patrzy w prawo, więc odwracamy dla 'left'
       if(t.lastDir === 'left') ctx.scale(-1, 1);
       if(zolwSpr) spriteZolw(zolwSpr, t.frame, t.width, t.height, 0);
       else { ctx.fillStyle = '#2e5c1e'; ctx.fillRect(-t.width/2, -t.height/2, t.width, t.height); }
@@ -792,18 +784,30 @@ function draw(){
     }
   }
 
-  // Rysowanie gracza (Miganie podczas bycia trafionym lub podczas używania Mocy Serc)
+  // Rysowanie gracza i efektów
   let skipDraw = false;
-  if(inv>0 && inv%10<5 && giantTimer === 0) skipDraw = true; // Zwykłe rany
-  if(heartShootTimer > 0 && heartShootTimer % 10 < 5) skipDraw = true; // Miganie powerupu
+  if(inv>0 && inv%10<5 && giantTimer === 0) skipDraw = true; 
   
   if(!skipDraw){
     ctx.save();ctx.translate(player.x + player.width/2, player.y + player.height/2);
     if(lastDir==='left')ctx.scale(-1,1);
-    // Skompensowanie yo gdy gigant
     let yOff = (player.width === 120) ? 12 : 6;
-    if(playerSpr)sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,yOff);
-    else{ctx.fillStyle='#fff';ctx.fillRect(-player.width/2,-player.height/2,player.width,player.height);}
+    
+    if(playerSpr) {
+      sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,yOff);
+      
+      // Magiczny, animowany tęczowy filtr ukrywający pikselozę!
+      if (giantTimer > 0 || heartShootTimer > 0) {
+        ctx.globalCompositeOperation = 'source-atop';
+        ctx.fillStyle = `hsl(${(tm * 800) % 360}, 100%, 50%)`;
+        ctx.globalAlpha = 0.5;
+        ctx.fillRect(-player.width/2, -player.height/2 + yOff, player.width, player.height);
+        ctx.globalAlpha = 1.0;
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    } else {
+      ctx.fillStyle='#fff'; ctx.fillRect(-player.width/2,-player.height/2,player.width,player.height);
+    }
     ctx.restore();
   }
   
