@@ -148,16 +148,20 @@ function keyOut(img){
   return c;
 }
 let playerSpr=null,bossSpr=null,trawaPat=null,trawaImgReady=false;
-const playerImg=new Image();playerImg.onload=()=>{playerSpr=keyOut(playerImg);};playerImg.src='Aleks.jpg';
-const bossImg=new Image();bossImg.onload=()=>{bossSpr=keyOut(bossImg);};bossImg.src='Black.jpg';
+let zolwSpr=null;
 
-// Ładowanie, przycinanie i skalowanie tekstury trawy
+const playerImg=new Image();playerImg.onload=()=>{playerSpr=keyOut(playerImg);};playerImg.src='Aleks.jpg';
+// Przywrócono Blacki jako Bossa
+const bossImg=new Image();bossImg.onload=()=>{bossSpr=keyOut(bossImg);};bossImg.src='Black.jpg';
+// Dodano żółwia jako przeszkodę
+const zolwImg=new Image();zolwImg.onload=()=>{zolwSpr=keyOut(zolwImg);};zolwImg.src='zolw.jpg';
+
+// Ładowanie i przycinanie trawy
 const trawaImg = new Image();
 trawaImg.onload = () => {
   const tempCanvas = document.createElement('canvas');
   const cropAmount = trawaImg.height * 0.28; 
   
-  // Zmniejszamy rozdzielczość tekstury o połowę, aby w grze była drobniejsza i ostrzejsza
   const scaleFactor = 0.2; 
   tempCanvas.width = trawaImg.width * scaleFactor;
   tempCanvas.height = (trawaImg.height - cropAmount) * scaleFactor;
@@ -180,7 +184,7 @@ let cameraX=0,frame=0,animC=0,lastDir='right',beatFlash=0,shake=0;
 let distScore=0,boneScore=0,score=0,maxX=100,combo=0,comboT=0;
 let lives=MAXL,bossLives=3,bossOn=false,bossInv=0,inv=0,kb=0;
 let coyote=0,jumpBuf=0,jumpWas=false,safe={x:100,y:200},muted=false;
-let particles=[],platforms=[],bones=[],boxes=[],topScores=[];
+let particles=[],platforms=[],bones=[],boxes=[],turtles=[],topScores=[];
 try{topScores=JSON.parse(localStorage.getItem('neonJumperTopScores'))||[];if(!Array.isArray(topScores))topScores=[]}catch(e){topScores=[]}
 
 const player={x:100,y:200,width:60,height:60,vx:0,vy:0,speed:7,jumpPower:-15,grounded:false,jumps:0};
@@ -202,6 +206,23 @@ function tryBox(x0,x1,gy,tries){
     if(boxFree(x,y)){boxes.push({x,y,w:44,h:44,broken:false,n:2+Math.floor(Math.random()*3)});return;}
   }
 }
+function spawnTurtle(p) {
+  if (p.w < 120) return; // żółw potrzebuje miejsca do chodzenia
+  const tw = 70, th = 50;
+  turtles.push({
+    x: p.x + p.w / 2 - tw / 2,
+    y: p.y - th + 15, // zanużony w trawie
+    width: tw,
+    height: th,
+    vx: (Math.random() > 0.5 ? 1 : -1) * rnd(1.2, 2.5),
+    leftLimit: p.x + 5,
+    rightLimit: p.x + p.w - tw - 5,
+    frame: 0,
+    animC: 0,
+    lastDir: 'left',
+    dead: false
+  });
+}
 function genChunk(){
   const l3=level===3,d=l3?Math.min(1,genX/14000):.6;
   const gap=rnd(170,230)+d*(l3?110:70);
@@ -209,6 +230,10 @@ function genChunk(){
   const gx=genX+gap;
   if(Math.random()<(l3?.4-d*.2:.6)){const sp=addPlat(genX+gap/2-50,GROUND-50-rnd(90,130),100,20,pick(COLS));if(Math.random()<.5)addBones(sp,1);}
   const g=addPlat(gx,GROUND-50,w,50,pick(COLS));
+  
+  // Losowe dodawanie żółwi na głównej platformie
+  if(Math.random() < 0.4) spawnTurtle(g);
+
   let x=gx+80;const n=2+Math.floor(Math.random()*2);
   for(let i=0;i<n&&x<gx+w-100;i++){
     const p=addPlat(x,GROUND-50-rnd(110,240),rnd(90,140),20,pick(COLS));
@@ -220,9 +245,9 @@ function genChunk(){
   genX=gx+w;
 }
 function buildLevel(){
-  platforms=[];bones=[];boxes=[];particles=[];arena=null;bossOn=false;
+  platforms=[];bones=[];boxes=[];particles=[];turtles=[];arena=null;bossOn=false;
   const cfg=CFG[level];
-  boss.width=boss.height=cfg.size;boss.vx=-3;boss.vy=0;boss.frame=0;boss.lastDir='left';
+  boss.width=cfg.size; boss.height=cfg.size; boss.vx=-3; boss.vy=0; boss.frame=0; boss.lastDir='left';
   if(level===1){
     const ch=GROUND;
     [[0,1000,'#ff00ff'],[1200,800,'#00ffff'],[2300,1500,'#ff00ff'],[4100,1800,'#00ffff']].forEach(a=>addPlat(a[0],ch-50,a[1],50,a[2]));
@@ -232,8 +257,11 @@ function buildLevel(){
     arena=platforms[3];
     for(let i=1;i<platforms.length;i++)if(Math.random()>.3)addBones(platforms[i],1+Math.floor(Math.random()*3));
     [[0,2,250,900],[1,2,1280,1900],[2,3,2380,3700],[3,1,4180,4450]].forEach(s=>tryBox(s[2],s[3],platforms[s[0]].y,40*s[1]));
-    // dodatkowe próby, aby uzyskać żądaną liczbę pudełek
     [[0,1,250,900],[1,1,1280,1900],[2,2,2380,3700]].forEach(s=>tryBox(s[2],s[3],platforms[s[0]].y,20));
+    
+    // Ręczne dodanie kilku żółwi na startowej planszy
+    spawnTurtle(platforms[1]);
+    spawnTurtle(platforms[2]);
   }else if(level===2){
     addPlat(0,GROUND-50,1000,50,'#ff00ff');genX=1000;
     while(genX<5200)genChunk();
@@ -253,6 +281,7 @@ function trim(){
   if(platforms.length>70){
     const m=cameraX-900;
     platforms=platforms.filter(p=>p.x+p.w>m);bones=bones.filter(b=>b.x>m);boxes=boxes.filter(b=>b.x>m);
+    turtles=turtles.filter(t=>t.x+t.width>m);
   }
 }
 
@@ -432,7 +461,35 @@ function update(now){
   // nieskończona trasa na poziomie 3
   if(level===3&&genX<player.x+viewW+1500){while(genX<player.x+viewW+2500)genChunk();trim();}
 
-  // boss
+  // Obsługa żółwi - przeszkód
+  for (const t of turtles) {
+    if(t.dead) continue;
+    t.x += t.vx;
+    // Odbijanie żółwia od krawędzi swojej platformy
+    if (t.x < t.leftLimit) { t.vx = Math.abs(t.vx); t.lastDir = 'right'; }
+    else if (t.x + t.width > t.rightLimit) { t.vx = -Math.abs(t.vx); t.lastDir = 'left'; }
+    
+    if(++t.animC > 8) { t.frame = (t.frame + 1) % 4; t.animC = 0; }
+    
+    // Detekcja kolizji z żółwiem
+    if (inv === 0 && hit(player, t)) {
+      if (player.vy > 0 && player.y + player.height - player.vy <= t.y + 20) {
+        // Udany skok na grzbiet
+        player.vy = -12; player.jumps = 1; sStomp(); shake = 5;
+        burst(t.x + t.width/2, t.y + t.height/2, '#2e5c1e', 14);
+        t.dead = true;
+        boneScore += 100; // Punkty za pokonanie
+        updateScore();
+      } else {
+        // Zderzenie z bokiem lub dołem
+        hurt(player.x + 30 < t.x + t.width/2 ? -1 : 1);
+      }
+    }
+  }
+  // Usunięcie martwych żółwi z pamięci
+  turtles = turtles.filter(t => !t.dead);
+
+  // BOSS (Kundel Blacki)
   const trig=level===3?700:(arena?arena.x:4100);
   if(player.x>trig&&!bossOn){
     bossOn=true;$('bossPanel').style.display='block';updateHUD();
@@ -458,6 +515,8 @@ function update(now){
         if(Math.random()<cfg.jump)boss.vy=cfg.jv;
       }
     }
+    
+    // Walka z głównym Bossem
     if(bossInv===0&&hit(player,boss)){
       if(player.vy>0&&player.y+player.height-player.vy<=boss.y+Math.max(20,boss.height*.35)){
         player.vy=-13;player.jumps=1;sStomp();shake=6;
@@ -514,6 +573,11 @@ function sprite(img,fr,row,dw,dh,yo){
   const fw=img.width/4,fh=img.height/3;
   ctx.drawImage(img,fr*fw,row*fh,fw,fh,-dw/2,-dh/2+(yo||0),dw,dh);
 }
+// Render poziomego sprite sheet (dla żółwia)
+function spriteSingleRow(img,fr,dw,dh,yo){
+  const fw=img.width/4,fh=img.height;
+  ctx.drawImage(img,fr*fw,0,fw,fh,-dw/2,-dh/2+(yo||0),dw,dh);
+}
 function rr(x,y,w,h,r){
   ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
   ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
@@ -558,7 +622,7 @@ function draw(){
   ctx.save();
   ctx.translate(-cameraX+(Math.random()-.5)*shake,(Math.random()-.5)*shake);
 
-  // Klasyczne platformy i ziemia na podstawie zaimportowanego zdjęcia (trawa.jpg)
+  // Platformy i ziemia (trawa.jpg)
   for(const p of platforms){
     if(p.x+p.w>cameraX && p.x<cameraX+viewW){
       ctx.shadowBlur = 0; 
@@ -566,7 +630,6 @@ function draw(){
       if (trawaImgReady) {
         ctx.save();
         
-        // --- CZĘŚĆ 1: Główny blok ziemi (dirt) ---
         ctx.save();
         ctx.beginPath();
         ctx.rect(p.x, p.y + 20, p.w, p.h - 20);
@@ -576,7 +639,6 @@ function draw(){
         ctx.fillRect(0, 20, p.w, p.h - 20);
         ctx.restore();
 
-        // --- CZĘŚĆ 2: Animowane, gęste falowanie trawy ---
         ctx.save();
         ctx.translate(p.x, p.y + 24); 
         const windAngle = Math.sin(tm * 2.4 + p.x * 0.007) * 0.12; 
@@ -591,7 +653,6 @@ function draw(){
         ctx.fillRect(-15, 0, p.w + 30, 26);
         ctx.restore();
 
-        // Delikatny, ciemny kontur dolnych i bocznych warstw podłoża
         ctx.strokeStyle = 'rgba(28, 14, 7, 0.4)';
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -631,6 +692,8 @@ function draw(){
     ctx.fillStyle='#221100';ctx.beginPath();ctx.moveTo(lair.x+45,lair.y+35);ctx.lineTo(lair.x+25,lair.y+80);ctx.lineTo(lair.x+65,lair.y+80);ctx.fill();
     ctx.fillStyle='#fff';ctx.fillRect(lair.x+33,lair.y+30,24,6);
   }
+  
+  // Rysowanie Bossów (Kundel Blacki)
   if(bossOn&&(level===3||bossLives>0)&&!(bossInv>0&&bossInv%8<4)){
     ctx.save();ctx.translate(boss.x+boss.width/2,boss.y+boss.height/2);
     if(boss.lastDir==='right')ctx.scale(-1,1);
@@ -639,6 +702,19 @@ function draw(){
     else{ctx.fillStyle='#ff0000';ctx.fillRect(-boss.width/2,-boss.height/2,boss.width,boss.height);}
     ctx.restore();
   }
+
+  // Rysowanie Żółwi
+  for (const t of turtles) {
+    if(t.x + t.width > cameraX && t.x < cameraX + viewW) {
+      ctx.save();ctx.translate(t.x + t.width/2, t.y + t.height/2);
+      if(t.lastDir === 'right') ctx.scale(-1, 1);
+      if(zolwSpr) spriteSingleRow(zolwSpr, t.frame, t.width, t.height, 0);
+      else { ctx.fillStyle = '#2e5c1e'; ctx.fillRect(-t.width/2, -t.height/2, t.width, t.height); }
+      ctx.restore();
+    }
+  }
+
+  // Rysowanie gracza
   if(!(inv>0&&inv%10<5)){
     ctx.save();ctx.translate(player.x+30,player.y+30);
     if(lastDir==='left')ctx.scale(-1,1);
