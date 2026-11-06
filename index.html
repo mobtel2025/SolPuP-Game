@@ -178,7 +178,7 @@ for(let i=10; i<128; i+=20) {
 trawaPat = ctx.createPattern(patCanvas, 'repeat');
 trawaImgReady = true;
 
-/* ---------- stan (TERAZ 5 POZIOMÓW) ---------- */
+/* ---------- stan (5 POZIOMÓW) ---------- */
 const GROUND=480,STEP=1000/60,MAXL=5;
 const CFG={
   1:{size:50,lives:3,sp:3.0,add:1.0,jump:.015,jv:-12},
@@ -262,18 +262,20 @@ function genChunk(){
   
   if(Math.random() < 0.4) spawnTurtle(g);
   if(Math.random() < 0.35) spawnBee(g); 
-  if(Math.random() < 0.3) spawnRose(g);
+  if(Math.random() < 0.5) spawnRose(g); // 50% na różę z losowego kawałka platformy!
 
   let x=gx+80;const n=2+Math.floor(Math.random()*2);
   for(let i=0;i<n&&x<gx+w-100;i++){
     const p=addPlat(x,GROUND-50-rnd(110,240),rnd(90,140),20,pick(COLS));
     if(Math.random()<.7)addBones(p,1+Math.floor(Math.random()*2));
+    if(Math.random()<.3)spawnRose(p); // 30% szans, że róża pojawi się nawet na małych zawieszonych kładkach!
     x+=rnd(170,270);
   }
   if(Math.random()<.5)addBones(g,1);
   if(Math.random()<(l_inf?.5:.35))tryBox(gx+60,gx+w-110,GROUND-50,8);
   genX=gx+w;
 }
+
 function buildLevel(){
   platforms=[];bones=[];boxes=[];particles=[];turtles=[];bees=[];projectiles=[];honeycombs=[];roses=[];
   arena=null;bossOn=false;
@@ -295,7 +297,18 @@ function buildLevel(){
     spawnTurtle(platforms[1]);
     spawnTurtle(platforms[2]);
     spawnBee(platforms[1]); 
+    
+    // ZAGWARANTOWANE CO NAJMNIEJ 3 RÓŻE NA LEVELU 1
+    spawnRose(platforms[1]);
     spawnRose(platforms[2]);
+    spawnRose(platforms[5]);
+    
+    // ORAZ DODATKOWE LOSOWE RÓŻE!
+    for(let i=1; i<platforms.length; i++) {
+      if(platforms[i] !== arena && Math.random() < 0.5) { // 50% szans dla każdej platformy
+        spawnRose(platforms[i]);
+      }
+    }
   }else if(level < MAXL){
     addPlat(0,GROUND-50,1000,50,'#ff00ff');genX=1000;
     const endDist = 2000 + level * 1500; 
