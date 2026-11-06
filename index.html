@@ -148,11 +148,13 @@ function keyOut(img){
   return c;
 }
 let playerSpr=null,bossSpr=null,trawaPat=null,trawaImgReady=false;
-let zolwSpr=null;
+let zolwSpr=null, pszczolaSpr=null;
 
 const playerImg=new Image();playerImg.onload=()=>{playerSpr=keyOut(playerImg);};playerImg.src='Aleks.jpg';
 const bossImg=new Image();bossImg.onload=()=>{bossSpr=keyOut(bossImg);};bossImg.src='Black.jpg';
 const zolwImg=new Image();zolwImg.onload=()=>{zolwSpr=keyOut(zolwImg);};zolwImg.src='zolw.jpg';
+// Nowa Pszczoła
+const pszczolaImg=new Image();pszczolaImg.onload=()=>{pszczolaSpr=keyOut(pszczolaImg);};pszczolaImg.src='pszczola.jpg';
 
 // Generator proceduralnej trawy (Kreskówkowa Ziemia)
 const patCanvas = document.createElement('canvas');
@@ -188,7 +190,7 @@ let cameraX=0,frame=0,animC=0,lastDir='right',beatFlash=0,shake=0;
 let distScore=0,boneScore=0,score=0,maxX=100,combo=0,comboT=0;
 let lives=MAXL,bossLives=3,bossOn=false,bossInv=0,inv=0,kb=0;
 let coyote=0,jumpBuf=0,jumpWas=false,safe={x:100,y:200},muted=false;
-let particles=[],platforms=[],bones=[],boxes=[],turtles=[],projectiles=[],topScores=[];
+let particles=[],platforms=[],bones=[],boxes=[],turtles=[],bees=[],projectiles=[],honeycombs=[],topScores=[];
 let giantTimer = 0, heartShootTimer = 0; 
 
 try{topScores=JSON.parse(localStorage.getItem('neonJumperTopScores'))||[];if(!Array.isArray(topScores))topScores=[]}catch(e){topScores=[]}
@@ -229,6 +231,24 @@ function spawnTurtle(p) {
     dead: false
   });
 }
+function spawnBee(p) {
+  if (p.w < 150) return;
+  const bw = 64, bh = 50;
+  bees.push({
+    x: p.x + p.w / 2 - bw / 2,
+    baseY: p.y - 180 - Math.random() * 60, // Wysoko w powietrzu
+    y: p.y - 180,
+    width: bw, height: bh,
+    vx: (Math.random() > 0.5 ? 1 : -1) * rnd(1, 2),
+    leftLimit: p.x + 10,
+    rightLimit: p.x + p.w - bw - 10,
+    frame: 0, animC: 0,
+    shootTimer: 60 + Math.random() * 90, // Co ile strzela
+    isShooting: 0,
+    lastDir: 'left',
+    dead: false
+  });
+}
 function genChunk(){
   const l3=level===3,d=l3?Math.min(1,genX/14000):.6;
   const gap=rnd(170,230)+d*(l3?110:70);
@@ -238,6 +258,7 @@ function genChunk(){
   const g=addPlat(gx,GROUND-50,w,50,pick(COLS));
   
   if(Math.random() < 0.4) spawnTurtle(g);
+  if(Math.random() < 0.35) spawnBee(g); // Nowy Spawn Pszczoły
 
   let x=gx+80;const n=2+Math.floor(Math.random()*2);
   for(let i=0;i<n&&x<gx+w-100;i++){
@@ -250,7 +271,7 @@ function genChunk(){
   genX=gx+w;
 }
 function buildLevel(){
-  platforms=[];bones=[];boxes=[];particles=[];turtles=[];projectiles=[];
+  platforms=[];bones=[];boxes=[];particles=[];turtles=[];bees=[];projectiles=[];honeycombs=[];
   arena=null;bossOn=false;
   giantTimer = 0; heartShootTimer = 0;
   
@@ -269,6 +290,8 @@ function buildLevel(){
     
     spawnTurtle(platforms[1]);
     spawnTurtle(platforms[2]);
+    spawnBee(platforms[1]); // Pierwsza pszczoła na poziome 1
+    spawnBee(platforms[2]);
   }else if(level===2){
     addPlat(0,GROUND-50,1000,50,'#ff00ff');genX=1000;
     while(genX<5200)genChunk();
@@ -289,7 +312,9 @@ function trim(){
     const m=cameraX-900;
     platforms=platforms.filter(p=>p.x+p.w>m);bones=bones.filter(b=>b.x>m);boxes=boxes.filter(b=>b.x>m);
     turtles=turtles.filter(t=>t.x+t.width>m);
+    bees=bees.filter(b=>b.x+b.width>m);
     projectiles=projectiles.filter(pr=>pr.x>m);
+    honeycombs=honeycombs.filter(hc=>hc.x>m);
   }
 }
 
@@ -395,7 +420,7 @@ function breakBox(bx){
   const cx=bx.x+bx.w/2,cy=bx.y+bx.h/2;
   burst(cx,cy,'#ffd84a',14);burst(cx,cy,'#ff9a1f',10);burst(cx,cy,'#ffffff',5);
   
-  // Zmiana: Szansa na moc wynosi 15%, aby gra nie była zbyt prosta
+  // Szansa na moc wynosi 15%
   if(Math.random() < 0.15) {
     let specialType = Math.random() < 0.5 ? 'tree' : 'heart';
     bones.push({x:cx-15,y:bx.y-10,width:30,height:30,collected:false,pop:true,vx:(Math.random()-.5)*2,vy:-10,delay:14,type:specialType});
@@ -460,15 +485,24 @@ function update(now){
     }
   }
 
-  // Kolizje pocisków serduszkowych
+  // Kolizje pocisków serduszkowych z wrogami i pszczołami
   for (const pr of projectiles) {
     pr.x += pr.vx; pr.life--;
+    // Żółwie
     for (const t of turtles) {
       if (!t.dead && hit(pr, t)) {
         t.dead = true; burst(t.x + t.width/2, t.y + t.height/2, '#2e5c1e', 14);
         boneScore += 100; updateScore(); pr.life = 0;
       }
     }
+    // Pszczoły
+    for (const b of bees) {
+      if (!b.dead && hit(pr, b)) {
+        b.dead = true; burst(b.x + b.width/2, b.y + b.height/2, '#ffe066', 15);
+        boneScore += 150; updateScore(); pr.life = 0;
+      }
+    }
+    // Trafienie w Bossa
     if (bossOn && bossLives > 0 && hit(pr, boss)) {
       if (bossInv === 0) {
         if(level !== 3) {
@@ -482,6 +516,79 @@ function update(now){
     }
   }
   projectiles = projectiles.filter(p => p.life > 0);
+
+  // LOGIKA PSZCZÓŁ I PLASTERKÓW MIODU
+  for (const b of bees) {
+    if (b.dead) continue;
+    
+    // Ruch patrolowy na boki w powietrzu
+    b.x += b.vx;
+    if (b.x < b.leftLimit) { b.vx = Math.abs(b.vx); b.lastDir = 'right'; }
+    else if (b.x + b.width > b.rightLimit) { b.vx = -Math.abs(b.vx); b.lastDir = 'left'; }
+    
+    // Lekkie falowanie góra-dół
+    b.y = b.baseY + Math.sin(now * 0.005) * 12;
+
+    // Animacja latania
+    if(++b.animC > 4) { b.frame = (b.frame + 1) % 4; b.animC = 0; }
+
+    // Ostrzał plasterkami miodu
+    if (b.isShooting > 0) {
+      b.isShooting--;
+      b.frame = 2; // klatka z otwartym pyszczkiem/ataku
+    } else {
+      b.shootTimer--;
+      if (b.shootTimer <= 0) {
+        b.isShooting = 20; // Blokada animacji strzału
+        b.shootTimer = 110 + Math.random() * 80;
+        
+        // Plaster miodu leci w dół po skosie, lekko w stronę gracza
+        const dx = (player.x < b.x) ? -3 : 3;
+        honeycombs.push({
+          x: b.x + b.width / 2 - 12,
+          y: b.y + b.height - 10,
+          vx: dx,
+          vy: 4.5, // Spadanie w dół
+          width: 24, height: 24,
+          rot: 0,
+          life: 140
+        });
+        tone('triangle', 450, 200, 0.15, 0.08, 'exp');
+      }
+    }
+
+    // Atak psa na pszczołę
+    if (inv === 0 && hit(player, b)) {
+      // 1. Skok od góry LUB uderzenie głową od dołu (podskok)
+      const dy = Math.abs((player.y + player.height / 2) - (b.y + b.height / 2));
+      if (dy > 20) {
+        player.vy = (player.y < b.y) ? -12 : 5; // odskok
+        sStomp(); shake = 5;
+        burst(b.x + b.width / 2, b.y + b.height / 2, '#ffa000', 16);
+        burst(b.x + b.width / 2, b.y + b.height / 2, '#fff3e0', 12);
+        b.dead = true;
+        boneScore += 150;
+        updateScore();
+      } else {
+        hurt(player.x + player.width / 2 < b.x + b.width / 2 ? -1 : 1);
+      }
+    }
+  }
+  bees = bees.filter(b => !b.dead);
+
+  // Logika Honeycombs (Wrogie pociski miodu)
+  for (const h of honeycombs) {
+    h.x += h.vx;
+    h.y += h.vy;
+    h.rot += 0.08;
+    h.life--;
+
+    if (inv === 0 && hit(player, h)) {
+      hurt(player.x + player.width / 2 < h.x ? -1 : 1);
+      h.life = 0;
+    }
+  }
+  honeycombs = honeycombs.filter(h => h.life > 0);
 
   if(kb===0){
     if(keys.ArrowLeft||keys.KeyA){player.vx=-player.speed;lastDir='left';}
@@ -521,6 +628,7 @@ function update(now){
 
   if(level===3&&genX<player.x+viewW+1500){while(genX<player.x+viewW+2500)genChunk();trim();}
 
+  // Kolizje z Żółwiami
   for (const t of turtles) {
     if(t.dead) continue;
     t.x += t.vx;
@@ -646,6 +754,18 @@ function spriteZolw(img,fr,dw,dh,yo){
     -dw/2, -dh/2 + (yo||0), dw, dh
   );
 }
+// Render Pszczoły z pobranej grafiki sprite.jpg [image_10.png]
+function spritePszczola(img, fr, row, dw, dh) {
+  const fw = img.width / 7;
+  const fh = img.height / 4;
+  ctx.drawImage(
+    img,
+    fr * fw, row * fh,
+    fw, fh,
+    -dw/2, -dh/2,
+    dw, dh
+  );
+}
 
 function rr(x,y,w,h,r){
   ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
@@ -676,7 +796,6 @@ function drawBox(b,tm){
 function draw(){
   const tm=performance.now()/1000;
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  // Wyłączamy wygładzanie globalnie - to sprawia, że pixel art, tła i żółwie są wyraźne
   ctx.imageSmoothingEnabled=false;
   const W=canvas.width/dpr,H=canvas.height/dpr;
   ctx.fillStyle=level===1?'#7ac5e8':level===2?'#e8a56a':'#2a1d4a';ctx.fillRect(0,0,W,H);
@@ -759,6 +878,23 @@ function draw(){
     ctx.fillText('❤️', pr.x + pr.width/2, pr.y + pr.height/2);
   }
 
+  // Rysowanie nowo-wystrzelonych plastrów miodu [image_10.png]
+  for (const h of honeycombs) {
+    ctx.save();
+    ctx.translate(h.x + h.width/2, h.y + h.height/2);
+    ctx.rotate(h.rot);
+    if(pszczolaSpr) {
+      // 0 wiersz to lot, dolny (3ci wiersz, klatka 0 to plasterek) [image_10.png]
+      spritePszczola(pszczolaSpr, 0, 3, h.width, h.height);
+    } else {
+      ctx.fillStyle = '#ffb300';
+      ctx.beginPath();
+      ctx.arc(0, 0, 10, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   if(bossOn&&arena){
     ctx.fillStyle='#654321';ctx.beginPath();ctx.moveTo(lair.x+45,lair.y);ctx.lineTo(lair.x,lair.y+80);ctx.lineTo(lair.x+90,lair.y+80);ctx.fill();
     ctx.fillStyle='#221100';ctx.beginPath();ctx.moveTo(lair.x+45,lair.y+35);ctx.lineTo(lair.x+25,lair.y+80);ctx.lineTo(lair.x+65,lair.y+80);ctx.fill();
@@ -774,6 +910,7 @@ function draw(){
     ctx.restore();
   }
 
+  // Rysowanie Żółwi
   for (const t of turtles) {
     if(t.x + t.width > cameraX && t.x < cameraX + viewW) {
       ctx.save();ctx.translate(t.x + t.width/2, t.y + t.height/2);
@@ -784,7 +921,30 @@ function draw(){
     }
   }
 
-  // RYSOWANIE GRACZA
+  // Rysowanie Pszczół [image_10.png]
+  for (const b of bees) {
+    if (b.x + b.width > cameraX && b.x < cameraX + viewW) {
+      ctx.save();
+      ctx.translate(b.x + b.width / 2, b.y + b.height / 2);
+      // Pszczoła standardowo patrzy w lewo, jak lastDir === 'right' to odwracamy
+      if (b.lastDir === 'right') ctx.scale(-1, 1);
+      
+      if (pszczolaSpr) {
+        // b.frame to klatki lotu, 0 wiersz idzie do lotu, 2 wiersz to strzelanie [image_10.png]
+        const animationRow = (b.isShooting > 0) ? 2 : Math.floor(tm * 3.5) % 3;
+        spritePszczola(pszczolaSpr, b.frame, animationRow, b.width, b.height);
+      } else {
+        // Fallback prostokąt, gdy brak pliku sprite
+        ctx.fillStyle = '#fbc02d';
+        ctx.fillRect(-b.width/2, -b.height/2, b.width, b.height);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(-10, -b.height/2, 6, b.height);
+      }
+      ctx.restore();
+    }
+  }
+
+  // Rysowanie gracza
   let skipDraw = false;
   if(inv>0 && inv%10<5 && giantTimer === 0) skipDraw = true; 
   if(heartShootTimer > 0 && heartShootTimer % 10 < 5) skipDraw = true; 
@@ -795,19 +955,16 @@ function draw(){
     let yOff = (player.width === 120) ? 12 : 6;
     
     if(playerSpr) {
-      // WŁĄCZAMY SPRZĘTOWE WYGŁADZANIE TYLKO DLA PIESKA! To usunie "poszarpane schodki" podczas bycia Super Pieskiem
       ctx.imageSmoothingEnabled = true;
 
-      // Nowy efekt filtru i świecącej AURY ukrywającej niedoskonałości
       if (giantTimer > 0 || heartShootTimer > 0) {
         ctx.filter = `hue-rotate(${Math.floor(tm * 800) % 360}deg) saturate(200%) brightness(1.2)`;
         ctx.shadowColor = `hsl(${(tm * 800) % 360}, 100%, 60%)`;
-        ctx.shadowBlur = 30; // Piękna poświata dla Super Psa
+        ctx.shadowBlur = 30; 
       }
 
       sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,yOff);
       
-      // Reset filtrów, cieni i wygładzania na sam koniec
       ctx.filter = 'none';
       ctx.shadowBlur = 0;
       ctx.imageSmoothingEnabled = false;
