@@ -154,45 +154,29 @@ const playerImg=new Image();playerImg.onload=()=>{playerSpr=keyOut(playerImg);};
 const bossImg=new Image();bossImg.onload=()=>{bossSpr=keyOut(bossImg);};bossImg.src='Black.jpg';
 const zolwImg=new Image();zolwImg.onload=()=>{zolwSpr=keyOut(zolwImg);};zolwImg.src='zolw.jpg';
 
-// ==========================================
-// GENERATOR BAJKOWEJ TEKSTURY ZIEMI I TRAWY
-// (Zastępuje całkowicie plik trawa.jpg)
-// ==========================================
+// Generator proceduralnej trawy 
 const patCanvas = document.createElement('canvas');
 patCanvas.width = 128; patCanvas.height = 128;
 const pctx = patCanvas.getContext('2d', {willReadFrequently: true});
-
-// 1. Tło ziemi (ciepły kreskówkowy brąz)
 pctx.fillStyle = '#966F33';
 pctx.fillRect(0, 0, 128, 128);
-
-// 2. Duże, zaokrąglone kamienie w ziemi
 pctx.fillStyle = '#6b471c';
 const rocks = [[25, 75, 14], [95, 90, 18], [55, 120, 12], [115, 60, 10], [15, 110, 8]];
 rocks.forEach(r => { pctx.beginPath(); pctx.arc(r[0], r[1], r[2], 0, Math.PI*2); pctx.fill(); });
-// Jasne refleksy (oświetlenie) na kamieniach
 pctx.fillStyle = '#b58b4c';
 rocks.forEach(r => { pctx.beginPath(); pctx.arc(r[0]-r[2]*.25, r[1]-r[2]*.25, r[2]*.4, 0, Math.PI*2); pctx.fill(); });
-
-// 3. Zygzakowate przejście (ciemna zieleń pod trawą)
 pctx.fillStyle = '#2e7d32';
 pctx.beginPath();
 for(let i=0; i<=128; i+=16) pctx.lineTo(i, 26 + (i%32===0 ? 6 : 0));
 pctx.lineTo(128, 0); pctx.lineTo(0, 0); pctx.fill();
-
-// 4. Baza jasnej trawy
 pctx.fillStyle = '#4caf50';
 pctx.fillRect(0, 0, 128, 20);
-
-// 5. Grube, wektorowe źdźbła trawy (falujące na wietrze)
 pctx.fillStyle = '#a5d6a7';
 for(let i=10; i<128; i+=20) {
   pctx.beginPath(); pctx.moveTo(i, 20); pctx.lineTo(i-6, 4); pctx.lineTo(i+6, 20); pctx.fill();
 }
-// Zapisujemy wzór do silnika gry
 trawaPat = ctx.createPattern(patCanvas, 'repeat');
 trawaImgReady = true;
-// ==========================================
 
 /* ---------- stan ---------- */
 const GROUND=480,STEP=1000/60,MAXL=3;
@@ -204,7 +188,9 @@ let cameraX=0,frame=0,animC=0,lastDir='right',beatFlash=0,shake=0;
 let distScore=0,boneScore=0,score=0,maxX=100,combo=0,comboT=0;
 let lives=MAXL,bossLives=3,bossOn=false,bossInv=0,inv=0,kb=0;
 let coyote=0,jumpBuf=0,jumpWas=false,safe={x:100,y:200},muted=false;
-let particles=[],platforms=[],bones=[],boxes=[],turtles=[],topScores=[];
+let particles=[],platforms=[],bones=[],boxes=[],turtles=[],projectiles=[],topScores=[];
+let giantTimer = 0, heartShootTimer = 0; // Nowe Powerupy
+
 try{topScores=JSON.parse(localStorage.getItem('neonJumperTopScores'))||[];if(!Array.isArray(topScores))topScores=[]}catch(e){topScores=[]}
 
 const player={x:100,y:200,width:60,height:60,vx:0,vy:0,speed:7,jumpPower:-15,grounded:false,jumps:0};
@@ -215,7 +201,7 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
 
 /* ---------- generowanie poziomów ---------- */
 function addPlat(x,y,w,h,color){const p={x,y,w,h,color};platforms.push(p);return p;}
-function addBones(p,n){for(let j=0;j<n;j++)bones.push({x:p.x+20+Math.random()*Math.max(0,p.w-50),y:p.y-40-Math.random()*60,w:30,h:20,collected:false});}
+function addBones(p,n){for(let j=0;j<n;j++)bones.push({x:p.x+20+Math.random()*Math.max(0,p.w-50),y:p.y-40-Math.random()*60,w:30,h:20,collected:false,type:'bone'});}
 function boxFree(x,y){
   const r={x:x-20,y:y-20,w:84,h:84};
   return !platforms.some(f=>f.y<GROUND-60&&r.x<f.x+f.w&&r.x+r.w>f.x&&r.y<f.y+f.h&&r.y+r.h>f.y)&&!boxes.some(b=>Math.abs(b.x-x)<170);
@@ -264,7 +250,10 @@ function genChunk(){
   genX=gx+w;
 }
 function buildLevel(){
-  platforms=[];bones=[];boxes=[];particles=[];turtles=[];arena=null;bossOn=false;
+  platforms=[];bones=[];boxes=[];particles=[];turtles=[];projectiles=[];
+  arena=null;bossOn=false;
+  giantTimer = 0; heartShootTimer = 0;
+  
   const cfg=CFG[level];
   boss.width=cfg.size; boss.height=cfg.size; boss.vx=-3; boss.vy=0; boss.frame=0; boss.lastDir='left';
   if(level===1){
@@ -300,6 +289,7 @@ function trim(){
     const m=cameraX-900;
     platforms=platforms.filter(p=>p.x+p.w>m);bones=bones.filter(b=>b.x>m);boxes=boxes.filter(b=>b.x>m);
     turtles=turtles.filter(t=>t.x+t.width>m);
+    projectiles=projectiles.filter(pr=>pr.x>m);
   }
 }
 
@@ -382,10 +372,11 @@ function showHint(msg){const h=$('hint');h.textContent=msg;h.style.opacity=1;cle
 /* ---------- gra ---------- */
 function startLevel(n,fresh){
   level=n;carry=fresh?0:score;
-  Object.assign(player,{x:100,y:200,vx:0,vy:0,jumps:0,grounded:false});
+  Object.assign(player,{x:100,y:200,width:60,height:60,vx:0,vy:0,jumps:0,grounded:false});
   lives=MAXL;bossLives=CFG[level].lives;bossInv=0;inv=0;kb=0;
   $('bossPanel').style.display='none';
   maxX=100;distScore=0;boneScore=0;combo=0;comboT=0;safe={x:100,y:200};cameraX=0;
+  giantTimer = 0; heartShootTimer = 0;
   for(const k in keys)keys[k]=false;
   buildLevel();updateScore();updateHUD();
   state='playing';paused=false;$('pauseBtn').textContent='⏸';lastT=null;
@@ -393,17 +384,22 @@ function startLevel(n,fresh){
 }
 function burst(x,y,color,n){for(let i=0;i<n;i++)particles.push({x,y,vx:(Math.random()-.5)*8,vy:(Math.random()-.9)*7,life:30+Math.random()*20,color});}
 function hurt(dir){
-  if(inv>0)return;
+  if(inv>0)return; // Jeśli gigant, inv stale jest odnawiany
   lives--;inv=90;sHurt();shake=8;updateHUD();combo=0;updateScore();
   player.vy=-8;player.vx=dir*9;kb=12;
-  burst(player.x+30,player.y+30,'#ff0055',14);
+  burst(player.x+player.width/2,player.y+player.height/2,'#ff0055',14);
   if(lives<=0)endGame();
 }
 function breakBox(bx){
   bx.broken=true;sBox();shake=Math.max(shake,4);
   const cx=bx.x+bx.w/2,cy=bx.y+bx.h/2;
   burst(cx,cy,'#ffd84a',14);burst(cx,cy,'#ff9a1f',10);burst(cx,cy,'#ffffff',5);
-  for(let i=0;i<bx.n;i++)bones.push({x:cx-15,y:bx.y-10,w:30,h:20,collected:false,pop:true,vx:(i-(bx.n-1)/2)*2.4+(Math.random()-.5),vy:-9-Math.random()*3,delay:14});
+  
+  // Wyskakuje powerup
+  let specialType = Math.random() < 0.5 ? 'tree' : 'heart';
+  bones.push({x:cx-15,y:bx.y-10,w:30,h:30,collected:false,pop:true,vx:(Math.random()-.5)*2,vy:-10,delay:14,type:specialType});
+  // Wyskakują standardowe kości
+  for(let i=0;i<bx.n;i++)bones.push({x:cx-15,y:bx.y-10,w:30,h:20,collected:false,pop:true,vx:(i-(bx.n-1)/2)*2.4+(Math.random()-.5),vy:-9-Math.random()*3,delay:14,type:'bone'});
 }
 function levelDone(){
   boneScore+=500*level;updateScore();state='between';
@@ -440,6 +436,55 @@ function update(now){
   if(inv>0)inv--;if(bossInv>0)bossInv--;if(kb>0)kb--;if(shake>0)shake*=.85;
   if(comboT>0&&--comboT===0){combo=0;updateScore();}
 
+  // Logika Giganta
+  if(giantTimer > 0) {
+    giantTimer--;
+    inv = Math.max(inv, 10); // Stała niewrażliwość
+    if(giantTimer === 0) {
+      player.width = 60; player.height = 60; 
+      showHint("Koniec bycia gigantem");
+    }
+  }
+
+  // Logika Strzelania Sercami
+  if(heartShootTimer > 0) {
+    heartShootTimer--;
+    if(heartShootTimer % 15 === 0) {
+      projectiles.push({
+        x: lastDir === 'right' ? player.x + player.width : player.x - 20,
+        y: player.y + player.height/2 - 10,
+        vx: lastDir === 'right' ? 12 : -12,
+        w: 24, h: 24, life: 60
+      });
+      tone('sine', 800, 1200, 0.1, 0.1, 'lin');
+    }
+  }
+
+  // Pociski serc
+  for (const pr of projectiles) {
+    pr.x += pr.vx; pr.life--;
+    // Trafienie w żółwia
+    for (const t of turtles) {
+      if (!t.dead && hit(pr, t)) {
+        t.dead = true; burst(t.x + t.width/2, t.y + t.height/2, '#2e5c1e', 14);
+        boneScore += 100; updateScore(); pr.life = 0;
+      }
+    }
+    // Trafienie w Bossa
+    if (bossOn && bossLives > 0 && hit(pr, boss)) {
+      if (bossInv === 0) {
+        if(level !== 3) {
+          bossLives--; bossInv = 30; updateHUD(); burst(boss.x + boss.width/2, boss.y, '#ff3300', 18);
+          if(bossLives <= 0) levelDone();
+        } else {
+          bossInv = 25; burst(boss.x + boss.width/2, boss.y, '#ffffff', 10);
+        }
+        pr.life = 0;
+      }
+    }
+  }
+  projectiles = projectiles.filter(p => p.life > 0);
+
   if(kb===0){
     if(keys.ArrowLeft||keys.KeyA){player.vx=-player.speed;lastDir='left';}
     else if(keys.ArrowRight||keys.KeyD){player.vx=player.speed;lastDir='right';}
@@ -460,7 +505,7 @@ function update(now){
   for(const p of platforms){
     if(hit(player,p)&&player.vy>0&&player.y+player.height-player.vy<=p.y+16){
       player.y=p.y-player.height+15;player.vy=0;player.grounded=true;player.jumps=0;
-      const cx=player.x+30;
+      const cx=player.x+player.width/2;
       if(cx>p.x+40&&cx<p.x+p.w-40&&p.w>=100)safe={x:player.x,y:player.y};
     }
   }
@@ -469,17 +514,15 @@ function update(now){
     if(bx.broken||!hitB(player,bx))continue;
     if(player.vy<0&&prevY>=bx.y+bx.h-6){breakBox(bx);player.y=bx.y+bx.h;player.vy=1;}
     else if(player.vy>=0&&prevY+player.height<=bx.y+8){player.y=bx.y-player.height;player.vy=0;player.grounded=true;player.jumps=0;}
-    else{if(player.x+30<bx.x+bx.w/2)player.x=bx.x-player.width;else player.x=bx.x+bx.w;player.vx=0;}
+    else{if(player.x+player.width/2<bx.x+bx.w/2)player.x=bx.x-player.width;else player.x=bx.x+bx.w;player.vx=0;}
   }
   coyote=player.grounded?6:Math.max(0,coyote-1);
 
   if(player.x<0)player.x=0;
   if(player.x>maxX){maxX=player.x;distScore=Math.floor((maxX-100)/50);updateScore();}
 
-  // nieskończona trasa na poziomie 3
   if(level===3&&genX<player.x+viewW+1500){while(genX<player.x+viewW+2500)genChunk();trim();}
 
-  // Obsługa żółwi - przeszkód
   for (const t of turtles) {
     if(t.dead) continue;
     t.x += t.vx;
@@ -496,13 +539,12 @@ function update(now){
         boneScore += 100;
         updateScore();
       } else {
-        hurt(player.x + 30 < t.x + t.width/2 ? -1 : 1);
+        hurt(player.x + player.width/2 < t.x + t.width/2 ? -1 : 1);
       }
     }
   }
   turtles = turtles.filter(t => !t.dead);
 
-  // BOSS (Kundel Blacki)
   const trig=level===3?700:(arena?arena.x:4100);
   if(player.x>trig&&!bossOn){
     bossOn=true;$('bossPanel').style.display='block';updateHUD();
@@ -537,12 +579,11 @@ function update(now){
           bossLives--;bossInv=70;updateHUD();burst(boss.x+boss.width/2,boss.y,'#ff3300',18);
           if(bossLives<=0)levelDone();
         }
-      }else hurt(level===3?1:(player.x+30<boss.x+boss.width/2?-1:1));
+      }else hurt(level===3?1:(player.x+player.width/2<boss.x+boss.width/2?-1:1));
     }
     if(boss.grounded){if(++boss.animC>(level===3?4:6)){boss.frame=(boss.frame+1)%4;boss.animC=0;}}else boss.frame=1;
   }
 
-  // kości wyskakujące z pudełek
   for(const b of bones){
     if(!b.pop||b.collected)continue;
     b.vy+=.5;b.vx*=.99;b.x+=b.vx;
@@ -559,9 +600,19 @@ function update(now){
   }
   for(const b of bones){
     if(!b.collected&&!(b.delay>0)&&hit(player,b)){
-      b.collected=true;combo++;comboT=90;
-      boneScore+=20*Math.min(combo,5);sBone();updateScore();
-      burst(b.x+15,b.y+10,'#ffffff',8);
+      b.collected=true;
+      if (b.type === 'bone') {
+        combo++;comboT=90;
+        boneScore+=20*Math.min(combo,5);sBone();updateScore();
+        burst(b.x+15,b.y+10,'#ffffff',8);
+      } else if (b.type === 'tree') {
+        sBone(); giantTimer = 600; 
+        if(player.width !== 120) { player.width = 120; player.height = 120; player.y -= 60; }
+        burst(b.x+15,b.y+15,'#4caf50', 20); showHint("Super Piesek! 10s");
+      } else if (b.type === 'heart') {
+        sBone(); heartShootTimer = 600;
+        burst(b.x+15,b.y+15,'#ff0055', 20); showHint("Moc Serc! 10s");
+      }
     }
   }
   for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=.3;p.life--;}
@@ -589,7 +640,15 @@ function spriteZolw(img,fr,dw,dh,yo){
   const fw = img.width / 4;
   const fHeightOriginal = img.height * 0.25; 
   const sourceY = img.height * 0.75; 
-  ctx.drawImage(img, fr * fw, sourceY, fw, fHeightOriginal, -dw/2, -dh/2+(yo||0), dw, dh);
+  // Dodane wewnętrzne marginesy obcinania dla czystej animacji
+  const cropMarginX = 2; const cropMarginY = 2;
+  
+  ctx.drawImage(
+    img, 
+    fr * fw + cropMarginX, sourceY + cropMarginY, 
+    fw - cropMarginX * 2, fHeightOriginal - cropMarginY * 2, 
+    -dw/2, -dh/2 + (yo||0), dw, dh
+  );
 }
 
 function rr(x,y,w,h,r){
@@ -682,14 +741,30 @@ function draw(){
 
   for(const b of boxes)if(!b.broken&&b.x+b.w>cameraX&&b.x<cameraX+viewW)drawBox(b,tm);
   ctx.shadowBlur=5;ctx.shadowColor='#fff';ctx.fillStyle='#fff';
+  
+  // Rysowanie kości i Powerupów
   for(const b of bones){
     if(!b.collected&&b.x+b.w>cameraX&&b.x<cameraX+viewW){
-      ctx.beginPath();
-      for(const [dx,dy] of [[6,6],[6,14],[24,6],[24,14]]){ctx.moveTo(b.x+dx+6,b.y+dy);ctx.arc(b.x+dx,b.y+dy,6,0,7);}
-      ctx.fill();ctx.fillRect(b.x+6,b.y+4,18,12);
+      if(b.type === 'bone') {
+        ctx.beginPath();
+        for(const [dx,dy] of [[6,6],[6,14],[24,6],[24,14]]){ctx.moveTo(b.x+dx+6,b.y+dy);ctx.arc(b.x+dx,b.y+dy,6,0,7);}
+        ctx.fill();ctx.fillRect(b.x+6,b.y+4,18,12);
+      } else if (b.type === 'tree') {
+        ctx.font = '28px "Segoe UI", Arial'; ctx.textAlign = 'center'; ctx.textBaseline='middle';
+        ctx.fillText('🌳', b.x + 15, b.y + 15);
+      } else if (b.type === 'heart') {
+        ctx.font = '28px "Segoe UI", Arial'; ctx.textAlign = 'center'; ctx.textBaseline='middle';
+        ctx.fillText('❤️', b.x + 15, b.y + 15);
+      }
     }
   }
   ctx.shadowBlur=0;
+
+  // Rysowanie strzelanych serc
+  ctx.font = '24px "Segoe UI", Arial'; ctx.textAlign = 'center'; ctx.textBaseline='middle';
+  for(const pr of projectiles) {
+    ctx.fillText('❤️', pr.x + pr.w/2, pr.y + pr.h/2);
+  }
 
   if(bossOn&&arena){
     ctx.fillStyle='#654321';ctx.beginPath();ctx.moveTo(lair.x+45,lair.y);ctx.lineTo(lair.x,lair.y+80);ctx.lineTo(lair.x+90,lair.y+80);ctx.fill();
@@ -709,20 +784,29 @@ function draw(){
   for (const t of turtles) {
     if(t.x + t.width > cameraX && t.x < cameraX + viewW) {
       ctx.save();ctx.translate(t.x + t.width/2, t.y + t.height/2);
-      if(t.lastDir === 'right') ctx.scale(-1, 1);
+      // Naprawa: Żółw z domyślnego pliku patrzy w prawo, więc odwracamy dla 'left'
+      if(t.lastDir === 'left') ctx.scale(-1, 1);
       if(zolwSpr) spriteZolw(zolwSpr, t.frame, t.width, t.height, 0);
       else { ctx.fillStyle = '#2e5c1e'; ctx.fillRect(-t.width/2, -t.height/2, t.width, t.height); }
       ctx.restore();
     }
   }
 
-  if(!(inv>0&&inv%10<5)){
-    ctx.save();ctx.translate(player.x+30,player.y+30);
+  // Rysowanie gracza (Miganie podczas bycia trafionym lub podczas używania Mocy Serc)
+  let skipDraw = false;
+  if(inv>0 && inv%10<5 && giantTimer === 0) skipDraw = true; // Zwykłe rany
+  if(heartShootTimer > 0 && heartShootTimer % 10 < 5) skipDraw = true; // Miganie powerupu
+  
+  if(!skipDraw){
+    ctx.save();ctx.translate(player.x + player.width/2, player.y + player.height/2);
     if(lastDir==='left')ctx.scale(-1,1);
-    if(playerSpr)sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,6);
-    else{ctx.fillStyle='#fff';ctx.fillRect(-30,-30,60,60);}
+    // Skompensowanie yo gdy gigant
+    let yOff = (player.width === 120) ? 12 : 6;
+    if(playerSpr)sprite(playerSpr,frame,!player.grounded?2:(Math.abs(player.vx)>.5?1:0),player.width,player.height,yOff);
+    else{ctx.fillStyle='#fff';ctx.fillRect(-player.width/2,-player.height/2,player.width,player.height);}
     ctx.restore();
   }
+  
   for(const p of particles){ctx.globalAlpha=Math.min(1,p.life/20);ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,4,4);}
   ctx.globalAlpha=1;
   ctx.restore();
